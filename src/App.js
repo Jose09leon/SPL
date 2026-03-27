@@ -1,104 +1,4 @@
 import React, { useState, useEffect } from 'react';
-<<<<<<< HEAD
-import { Html5QrcodeScanner } from 'html5-qrcode';
-
-function ScannerLibros() {
-  const [datos, setDatos] = useState({
-    codigo: '', 
-    titulo: '', 
-    autor: '', 
-    editorial: '', 
-    estado: 'Disponible' // Se asume disponible por defecto
-  });
-  const [mostrarForm, setMostrarForm] = useState(false);
-
-  useEffect(() => {
-    // Solo inicializa el escáner si no se está mostrando el formulario
-    if (!mostrarForm) {
-      const scanner = new Html5QrcodeScanner("reader", {
-        fps: 10,
-        qrbox: { width: 250, height: 150 }, // Caja para códigos de barras
-      });
-
-      scanner.render((codigoDetectado) => {
-        setDatos((prev) => ({ ...prev, codigo: codigoDetectado }));
-        setMostrarForm(true);
-        scanner.clear(); // Apaga la cámara al detectar el código
-      }, (error) => {
-        // Error silencioso mientras busca códigos
-      });
-
-      return () => scanner.clear(); // Limpia al desmontar
-    }
-  }, [mostrarForm]);
-
-  const guardar = () => {
-    fetch('/api/registrar-libro', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(datos)
-    })
-    .then(res => res.json())
-    .then(res => {
-      alert("¡Libro registrado exitosamente!");
-      setMostrarForm(false);
-      setDatos({ codigo: '', titulo: '', autor: '', editorial: '', estado: 'Disponible' });
-    })
-    .catch(err => alert("Error al conectar con el servidor"));
-  };
-
-  return (
-    <div style={{ textAlign: 'center', fontFamily: 'Arial, sans-serif', padding: '20px' }}>
-      <h1>Escáner de Biblioteca</h1>
-
-      {!mostrarForm ? (
-        <div style={{ maxWidth: '500px', margin: '0 auto' }}>
-          <p>Coloque el código de barras frente a la cámara</p>
-          <div id="reader"></div>
-        </div>
-      ) : (
-        <div style={{ 
-          padding: '30px', 
-          border: '1px solid #ddd', 
-          borderRadius: '8px',
-          display: 'inline-block',
-          backgroundColor: '#fff',
-          boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
-        }}>
-          <h2 style={{ marginTop: 0 }}>Registro de Libro</h2>
-          <p style={{ fontSize: '1.2em' }}><strong>Código:</strong> {datos.codigo}</p>
-          
-          <input 
-            type="text" 
-            placeholder="Título del libro" 
-            style={estiloInput} 
-            onChange={e => setDatos({...datos, titulo: e.target.value})} 
-          />
-          <input 
-            type="text" 
-            placeholder="Autor" 
-            style={estiloInput} 
-            onChange={e => setDatos({...datos, autor: e.target.value})} 
-          />
-          <input 
-            type="text" 
-            placeholder="Editorial" 
-            style={estiloInput} 
-            onChange={e => setDatos({...datos, editorial: e.target.value})} 
-          />
-          
-          <div style={{ marginTop: '20px' }}>
-            <button onClick={guardar} style={estiloBotonGuardar}>
-              Confirmar Registro
-            </button>
-            <button 
-              onClick={() => setMostrarForm(false)} 
-              style={{ ...estiloBotonGuardar, backgroundColor: '#f44336', marginTop: '10px' }}
-            >
-              Cancelar / Volver a escanear
-            </button>
-          </div>
-=======
 import { Html5QrcodeScanner } from "html5-qrcode";
 
 function App() {
@@ -106,31 +6,18 @@ function App() {
   const [mostrarForm, setMostrarForm] = useState(false);
   const [verLista, setVerLista] = useState(false);
   const [libros, setLibros] = useState([]);
-  const [datosLibro, setDatosLibro] = useState({ 
-    titulo: '', 
-    autor: '', 
-    editorial: ''
-  });
+  const [datosLibro, setDatosLibro] = useState({ titulo: '', autor: '', editorial: '' });
 
   const cargarLibros = () => {
-    fetch('/api/libros')
-      .then(res => res.json())
-      .then(data => setLibros(data))
-      .catch(err => console.error("Error cargando libros:", err));
+    fetch('/api/libros').then(res => res.json()).then(data => setLibros(data));
   };
 
-  useEffect(() => {
-    if (verLista) cargarLibros();
-  }, [verLista]);
+  useEffect(() => { if (verLista) cargarLibros(); }, [verLista]);
 
   useEffect(() => {
     if (!mostrarForm && !verLista) {
       const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 150 } });
-      scanner.render((text) => { 
-        setScannedCode(text); 
-        setMostrarForm(true); 
-        scanner.clear(); 
-      }, () => {});
+      scanner.render((text) => { setScannedCode(text); setMostrarForm(true); scanner.clear(); }, () => {});
       return () => { scanner.clear().catch(() => {}); };
     }
   }, [mostrarForm, verLista]);
@@ -139,118 +26,104 @@ function App() {
     fetch('/api/registrar-libro', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      // Enviamos Título, Autor, Editorial + el estado fijo "Disponible"
-      body: JSON.stringify({ 
-        codigo: scannedCode, 
-        ...datosLibro, 
-        estado: 'Disponible' 
-      })
-    })
-    .then(async res => {
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      alert("✅ Libro registrado como DISPONIBLE");
-      setMostrarForm(false); 
-      setScannedCode("");
+      body: JSON.stringify({ codigo: scannedCode, ...datosLibro, estado: 'Disponible' })
+    }).then(() => {
+      alert("✅ Libro registrado con éxito");
+      setMostrarForm(false);
       setDatosLibro({ titulo: '', autor: '', editorial: '' });
-    })
-    .catch(err => alert("⚠️ Error: " + err.message));
+    });
   };
 
   return (
-    <div style={{ textAlign: 'center', fontFamily: 'Segoe UI, sans-serif', padding: '20px' }}>
-      <h1 style={{ color: '#2c3e50' }}>📚 Sistema Biblioteca ITH</h1>
-      
-      <div style={{ marginBottom: '20px' }}>
-        <button onClick={() => setVerLista(false)} style={navBtn(!verLista)}>📸 Escanear</button>
-        <button onClick={() => setVerLista(true)} style={navBtn(verLista)}>📋 Ver Inventario</button>
-      </div>
-
-      {!verLista ? (
-        !mostrarForm ? (
-          <div style={{ maxWidth: '400px', margin: 'auto' }}>
-            <div id="reader"></div>
-            <p style={{color: '#7f8c8d'}}>Escanea el código de barras</p>
-          </div>
-        ) : (
-          <div style={cardStyle}>
-            <h3 style={{color: '#27ae60'}}>Código Detectado: {scannedCode}</h3>
-            <div style={{textAlign: 'left', maxWidth: '300px', margin: 'auto'}}>
-                <label style={labelStyle}>Título:</label>
-                <input style={inputStyle} placeholder="Nombre del libro" onChange={e => setDatosLibro({...datosLibro, titulo: e.target.value})} />
-                
-                <label style={labelStyle}>Autor:</label>
-                <input style={inputStyle} placeholder="Nombre del autor" onChange={e => setDatosLibro({...datosLibro, autor: e.target.value})} />
-                
-                <label style={labelStyle}>Editorial:</label>
-                <input style={inputStyle} placeholder="Ej. Pearson, Alfaomega..." onChange={e => setDatosLibro({...datosLibro, editorial: e.target.value})} />
-            </div>
-            <button onClick={guardarLibro} style={btnOk}>Registrar Libro</button>
-            <button onClick={() => setMostrarForm(false)} style={btnCancel}>Cancelar</button>
-          </div>
-        )
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={tableStyle}>
-            <thead>
-              <tr style={{ backgroundColor: '#27ae60', color: 'white' }}>
-                <th>Código</th><th>Título</th><th>Autor</th><th>Editorial</th><th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {libros.map(l => (
-                <tr key={l.id} style={{ borderBottom: '1px solid #ddd' }}>
-                  <td style={{padding: '10px'}}>{l.codigo}</td>
-                  <td>{l.titulo}</td>
-                  <td>{l.autor}</td>
-                  <td>{l.editorial}</td>
-                  <td style={{fontWeight: 'bold', color: '#27ae60'}}>{l.estado}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
->>>>>>> 497b563 (Registro de libros con escáner, backend server.js y conexión MySQL)
+    <div style={styles.container}>
+      <header style={styles.header}>
+        <h1 style={styles.title}>📚 Biblioteca Laboratorio Sistemas <span style={styles.subtitle}>ITH</span></h1>
+        <div style={styles.nav}>
+          <button onClick={() => setVerLista(false)} style={!verLista ? styles.btnNavActive : styles.btnNav}>📸 Escáner</button>
+          <button onClick={() => setVerLista(true)} style={verLista ? styles.btnNavActive : styles.btnNav}>📋 Ver Lista</button>
         </div>
-      )}
+      </header>
+
+      <main style={styles.main}>
+        {!verLista ? (
+          !mostrarForm ? (
+            <div style={styles.card}>
+              <p style={styles.instructions}>Coloque el código de barras frente a la cámara</p>
+              <div id="reader" style={styles.reader}></div>
+            </div>
+          ) : (
+            <div style={styles.cardForm}>
+              <h2 style={styles.cardTitle}>Nuevo Registro</h2>
+              <p style={styles.codeText}>Código: <strong>{scannedCode}</strong></p>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Título</label>
+                <input style={styles.input} placeholder="Nombre del libro" onChange={e => setDatosLibro({...datosLibro, titulo: e.target.value})} />
+                
+                <label style={styles.label}>Autor</label>
+                <input style={styles.input} placeholder="Nombre del autor" onChange={e => setDatosLibro({...datosLibro, autor: e.target.value})} />
+                
+                <label style={styles.label}>Editorial</label>
+                <input style={styles.input} placeholder="Editorial" onChange={e => setDatosLibro({...datosLibro, editorial: e.target.value})} />
+              </div>
+              <button onClick={guardarLibro} style={styles.btnSave}>Guardar Libro</button>
+              <button onClick={() => setMostrarForm(false)} style={styles.btnCancel}>Cancelar</button>
+            </div>
+          )
+        ) : (
+          <div style={styles.cardTable}>
+            <h2 style={styles.cardTitle}>Inventario Actual</h2>
+            <table style={styles.table}>
+              <thead>
+                <tr style={styles.tableHead}>
+                  <th>Código</th><th>Título</th><th>Autor</th><th>Editorial</th><th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {libros.map((l, i) => (
+                  <tr key={l.id} style={i % 2 === 0 ? styles.trEven : styles.trOdd}>
+                    <td style={styles.td}>{l.codigo}</td>
+                    <td style={styles.td}>{l.titulo}</td>
+                    <td style={styles.td}>{l.autor}</td>
+                    <td style={styles.td}>{l.editorial}</td>
+                    <td style={styles.td}><span style={styles.statusBadge}>{l.estado}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </main>
     </div>
   );
 }
 
-<<<<<<< HEAD
-// Estilos rápidos
-const estiloInput = {
-  display: 'block',
-  width: '100%',
-  padding: '12px',
-  margin: '10px 0',
-  borderRadius: '4px',
-  border: '1px solid #ccc',
-  boxSizing: 'border-box',
-  fontSize: '16px'
+const styles = {
+  container: { minHeight: '100vh', backgroundColor: '#f0f2f5', color: '#1a2b4c', fontFamily: '"Segoe UI", Tahoma, sans-serif' },
+  header: { backgroundColor: '#003366', padding: '25px 20px', color: 'white', textAlign: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' },
+  title: { margin: 0, fontSize: '26px' },
+  subtitle: { color: '#ffffff', fontWeight: '300', opacity: '0.8' },
+  nav: { marginTop: '20px', display: 'flex', justifyContent: 'center', gap: '15px' },
+  btnNav: { padding: '10px 25px', border: '1px solid white', borderRadius: '4px', cursor: 'pointer', backgroundColor: 'transparent', color: 'white', fontWeight: 'bold' },
+  btnNavActive: { padding: '10px 25px', border: '1px solid white', borderRadius: '4px', cursor: 'pointer', backgroundColor: 'white', color: '#003366', fontWeight: 'bold' },
+  main: { padding: '30px 15px', maxWidth: '1100px', margin: 'auto' },
+  card: { backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', textAlign: 'center' },
+  cardForm: { backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)', maxWidth: '450px', margin: 'auto' },
+  cardTable: { backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', overflowX: 'auto' },
+  instructions: { color: '#555', marginBottom: '15px' },
+  reader: { borderRadius: '5px', overflow: 'hidden', border: '1px solid #ccc' },
+  cardTitle: { margin: '0 0 20px 0', color: '#003366', borderBottom: '2px solid #003366', display: 'inline-block', paddingBottom: '5px' },
+  codeText: { backgroundColor: '#f8f9fa', padding: '10px', borderRadius: '4px', borderLeft: '4px solid #003366', marginBottom: '20px' },
+  formGroup: { textAlign: 'left' },
+  label: { display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px', color: '#333' },
+  input: { width: '100%', padding: '10px', marginBottom: '15px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box' },
+  btnSave: { width: '100%', padding: '12px', border: 'none', borderRadius: '4px', backgroundColor: '#003366', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px' },
+  btnCancel: { width: '100%', marginTop: '10px', padding: '8px', border: 'none', background: 'none', color: '#666', cursor: 'pointer', textDecoration: 'underline' },
+  table: { width: '100%', borderCollapse: 'collapse' },
+  tableHead: { backgroundColor: '#003366', color: 'white', textAlign: 'left' },
+  td: { padding: '12px', borderBottom: '1px solid #eee' },
+  trOdd: { backgroundColor: '#fff' },
+  trEven: { backgroundColor: '#f9f9f9' },
+  statusBadge: { backgroundColor: '#e7f3ff', color: '#0056b3', padding: '4px 12px', borderRadius: '15px', fontSize: '12px', fontWeight: 'bold', border: '1px solid #cce5ff' }
 };
-
-const estiloBotonGuardar = {
-  backgroundColor: '#4CAF50',
-  color: 'white',
-  padding: '14px 20px',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  width: '100%',
-  fontSize: '16px',
-  fontWeight: 'bold'
-};
-
-export default ScannerLibros;
-=======
-// Estilos
-const navBtn = (sel) => ({ padding: '10px 20px', cursor: 'pointer', border: 'none', backgroundColor: sel ? '#27ae60' : '#bdc3c7', color: 'white', borderRadius: '5px', margin: '0 5px', fontWeight: 'bold' });
-const cardStyle = { padding: '25px', border: '1px solid #ddd', borderRadius: '15px', display: 'inline-block', backgroundColor: '#f9f9f9', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' };
-const labelStyle = { display: 'block', marginTop: '10px', fontWeight: 'bold', fontSize: '14px' };
-const inputStyle = { display: 'block', width: '100%', padding: '10px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '5px', border: '1px solid #ccc' };
-const btnOk = { backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '12px', borderRadius: '5px', width: '100%', cursor: 'pointer', marginTop: '20px', fontWeight: 'bold' };
-const btnCancel = { backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '8px', borderRadius: '5px', width: '100%', marginTop: '10px', cursor: 'pointer' };
-const tableStyle = { width: '100%', maxWidth: '900px', margin: '20px auto', borderCollapse: 'collapse', backgroundColor: 'white' };
 
 export default App;
->>>>>>> 497b563 (Registro de libros con escáner, backend server.js y conexión MySQL)
