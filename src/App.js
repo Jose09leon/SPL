@@ -45,17 +45,27 @@ function App() {
     }
   }, [vistaActual, mostrarForm]);
 
-  const guardarLibro = () => {
+const guardarLibro = () => {
     fetch('/api/registrar-libro', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ codigo: scannedCode, ...datosLibro, estado: 'Disponible' })
     }).then(() => {
-      alert("✅ Libro registrado");
-      setMostrarForm(false);
-      setScannedCode("");
-      setVistaActual("inventario"); // Al guardar, vamos a ver que aparezca en el inventario
-    });
+      alert("✅ Libro registrado con éxito");
+      
+      // --- ESTO ES LO QUE CAMBIA ---
+      setMostrarForm(false);    // Cerramos el formulario
+      setScannedCode("");       // Limpiamos el código viejo
+      setDatosLibro({           // Limpiamos los campos para el siguiente libro
+        titulo: '', 
+        autor: '', 
+        editorial: '', 
+        ubicacion: 'Mueble 1 - Nivel 1' 
+      });
+      setVistaActual("registro"); // Aseguramos que se quede en la cámara
+      // -----------------------------
+      
+    }).catch(err => alert("Error al guardar: " + err));
   };
 
   return (
