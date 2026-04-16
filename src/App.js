@@ -16,7 +16,7 @@ function App() {
   
   const manejarLogin = (e) => {
     e.preventDefault();
-    if (credenciales.usuario === "admin" && credenciales.pass === "lsi123") {
+    if (credenciales.usuario === "admin" && credenciales.pass === "12345") {
       setUser("Administrador");
       setVistaActual("menu");
     } else {
