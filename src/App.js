@@ -11,21 +11,44 @@ function App() {
   const [mostrarForm, setMostrarForm] = useState(false);
   const [datosLibro, setDatosLibro] = useState({ titulo: '', autor: '', editorial: '', ubicacion: 'Mueble 1 - Nivel 1' });
 
-  // Credenciales temporales
+  // Credenciales capturadas del formulario
   const [credenciales, setCredenciales] = useState({ usuario: '', pass: '' });
   
-  const manejarLogin = (e) => {
+  // --- CORRECCIÓN: LOGIN CONECTADO AL BACKEND ---
+  const manejarLogin = async (e) => {
     e.preventDefault();
-    if (credenciales.usuario === "admin" && credenciales.pass === "12345") {
-      setUser("Administrador");
-      setVistaActual("menu");
-    } else {
-      alert("Credenciales incorrectas");
+    
+    try {
+      const respuesta = await fetch('http://10.19.11.249:3001/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          usuario: credenciales.usuario, 
+          password: credenciales.pass // Se envía como 'password' para el backend
+        })
+      });
+
+      const datos = await respuesta.json();
+
+      if (respuesta.ok && datos.auth) {
+        setUser(datos.user.nombre_completo);
+        setVistaActual("menu");
+        console.log("Login exitoso:", datos.user);
+      } else {
+        alert(datos.message || "Usuario o contraseña incorrectos");
+      }
+    } catch (error) {
+      console.error("Error de conexión:", error);
+      alert("No se pudo conectar con el servidor (Puerto 3001). Asegúrate de que el backend esté corriendo.");
     }
   };
 
   const cargarLibros = () => {
-    fetch('/api/libros').then(res => res.json()).then(data => setLibros(data));
+    // Nota: Cambiar a la URL completa si el proxy no está configurado
+    fetch('http://10.19.11.249:3001/api/libros')
+      .then(res => res.json())
+      .then(data => setLibros(data))
+      .catch(err => console.error("Error cargando libros:", err));
   };
 
   useEffect(() => {
@@ -45,26 +68,22 @@ function App() {
     }
   }, [vistaActual, mostrarForm]);
 
-const guardarLibro = () => {
-    fetch('/api/registrar-libro', {
+  const guardarLibro = () => {
+    fetch('http://10.19.11.249:3001/api/registrar-libro', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ codigo: scannedCode, ...datosLibro, estado: 'Disponible' })
     }).then(() => {
       alert("✅ Libro registrado con éxito");
-      
-      // --- ESTO ES LO QUE CAMBIA ---
-      setMostrarForm(false);    // Cerramos el formulario
-      setScannedCode("");       // Limpiamos el código viejo
-      setDatosLibro({           // Limpiamos los campos para el siguiente libro
+      setMostrarForm(false);
+      setScannedCode("");
+      setDatosLibro({ 
         titulo: '', 
         autor: '', 
         editorial: '', 
         ubicacion: 'Mueble 1 - Nivel 1' 
       });
-      setVistaActual("registro"); // Aseguramos que se quede en la cámara
-      // -----------------------------
-      
+      setVistaActual("registro");
     }).catch(err => alert("Error al guardar: " + err));
   };
 
@@ -88,8 +107,19 @@ const guardarLibro = () => {
           <div style={styles.cardLogin}>
             <h2 style={styles.cardTitle}>Acceso al Sistema</h2>
             <form onSubmit={manejarLogin} style={styles.formGroup}>
-              <input style={styles.input} placeholder="Usuario" onChange={e => setCredenciales({...credenciales, usuario: e.target.value})} />
-              <input type="password" style={styles.input} placeholder="Contraseña" onChange={e => setCredenciales({...credenciales, pass: e.target.value})} />
+              <input 
+                style={styles.input} 
+                placeholder="Usuario" 
+                autoComplete="username"
+                onChange={e => setCredenciales({...credenciales, usuario: e.target.value})} 
+              />
+              <input 
+                type="password" 
+                style={styles.input} 
+                placeholder="Contraseña" 
+                autoComplete="current-password"
+                onChange={e => setCredenciales({...credenciales, pass: e.target.value})} 
+              />
               <button type="submit" style={styles.btnSave}>Entrar</button>
             </form>
           </div>
@@ -98,6 +128,9 @@ const guardarLibro = () => {
         {/* VISTA 2: MENÚ (DASHBOARD) */}
         {vistaActual === "menu" && (
           <div style={styles.menuGrid}>
+            <div style={styles.welcomeText}>
+                <h3>Bienvenido, {user}</h3>
+            </div>
             <div style={styles.menuItem} onClick={() => setVistaActual("registro")}>
               <span style={styles.icon}>📸</span>
               <h3>Registro</h3>
@@ -118,11 +151,11 @@ const guardarLibro = () => {
               <h3>Devoluciones</h3>
               <p>Próximamente</p>
             </div>
-            <button onClick={() => setVistaActual("login")} style={styles.btnLogOut}>Cerrar Sesión</button>
+            <button onClick={() => { setUser(null); setVistaActual("login"); }} style={styles.btnLogOut}>Cerrar Sesión</button>
           </div>
         )}
 
-        {/* VISTA 3: INVENTARIO (TU TABLA) */}
+        {/* VISTA 3: INVENTARIO */}
         {vistaActual === "inventario" && (
           <div style={styles.cardTable}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
@@ -136,7 +169,7 @@ const guardarLibro = () => {
                 </tr>
               </thead>
               <tbody>
-                {libros.map((l, i) => (
+                {libros.length > 0 ? libros.map((l, i) => (
                   <tr key={i} style={i % 2 === 0 ? styles.trEven : styles.trOdd}>
                     <td style={styles.td}>{l.codigo}</td>
                     <td style={styles.td}>{l.titulo}</td>
@@ -144,7 +177,9 @@ const guardarLibro = () => {
                     <td style={styles.td}>{l.ubicacion}</td>
                     <td style={styles.td}><span style={styles.statusBadge}>{l.estado}</span></td>
                   </tr>
-                ))}
+                )) : (
+                    <tr><td colSpan="5" style={{textAlign:'center', padding:'20px'}}>No hay libros registrados.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -169,6 +204,8 @@ const guardarLibro = () => {
                   <option>Mueble 1 - Nivel 2</option>
                   <option>Mueble 2 - Nivel 1</option>
                   <option>Mueble 2 - Nivel 2</option>
+                  <option>Mueble 3 - Nivel 1</option>
+                  <option>Mueble 3 - Nivel 2</option>
                 </select>
               </div>
               <button onClick={guardarLibro} style={styles.btnSave}>Guardar</button>
@@ -181,6 +218,7 @@ const guardarLibro = () => {
   );
 }
 
+// Estilos se mantienen igual
 const styles = {
   container: { minHeight: '100vh', backgroundColor: '#f4f6f9', fontFamily: '"Segoe UI", sans-serif' },
   header: { backgroundColor: '#003366', padding: '20px', color: 'white', textAlign: 'center' },
@@ -192,6 +230,7 @@ const styles = {
   appTitle: { margin: '5px 0 0 0', fontSize: '22px', fontWeight: 'bold' },
   main: { padding: '30px 20px', maxWidth: '1100px', margin: 'auto' },
   cardLogin: { backgroundColor: 'white', padding: '40px', borderRadius: '15px', maxWidth: '400px', margin: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', textAlign:'center' },
+  welcomeText: { gridColumn: '1 / -1', textAlign: 'center', marginBottom: '10px', color: '#003366' },
   menuGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '25px' },
   menuItem: { backgroundColor: 'white', padding: '40px', borderRadius: '15px', textAlign: 'center', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.05)', transition: '0.3s', borderBottom: '6px solid #003366' },
   menuItemDisabled: { backgroundColor: '#eee', padding: '40px', borderRadius: '15px', textAlign: 'center', color: '#888' },
