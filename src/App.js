@@ -65,7 +65,7 @@ function App() {
     if (vistaActual === "logs") cargarLogs();
   }, [vistaActual]);
 
-  // --- LÓGICA DE USUARIO sugerido: nombre.apellido ---
+  // --- LÓGICA DE USUARIO SUGERIDO: nombre.apellido ---
   const manejarCambioNombre = (e) => {
     const nombreCompleto = e.target.value;
     const partes = nombreCompleto.trim().split(/\s+/);
@@ -124,7 +124,7 @@ function App() {
       </header>
 
       <main style={styles.main}>
-        {/* VISTA: LOGIN */}
+        {/* LOGIN */}
         {vistaActual === "login" && (
           <div style={styles.cardLogin}>
             <h2 style={styles.cardTitle}>Acceso al Sistema</h2>
@@ -136,7 +136,7 @@ function App() {
           </div>
         )}
 
-        {/* VISTA: MENÚ PRINCIPAL */}
+        {/* MENÚ PRINCIPAL */}
         {vistaActual === "menu" && (
           <div style={styles.menuGrid}>
             <div style={styles.welcomeText}><h3>Bienvenido, {user}</h3></div>
@@ -149,12 +149,10 @@ function App() {
               <span style={styles.icon}>📊</span><h3>Inventario</h3><p>Lista completa</p>
             </div>
 
-            {/* BOTÓN PRÉSTAMOS (COMO EN LA IMAGEN) */}
             <div style={styles.menuItemDisabled}>
               <span style={styles.icon}>🤝</span><h3>Préstamos</h3><p>Próximamente</p>
             </div>
 
-            {/* BOTÓN DEVOLUCIONES (COMO EN LA IMAGEN) */}
             <div style={styles.menuItemDisabled}>
               <span style={styles.icon}>🔄</span><h3>Devoluciones</h3><p>Próximamente</p>
             </div>
@@ -173,7 +171,7 @@ function App() {
           </div>
         )}
 
-        {/* VISTA: BITÁCORA */}
+        {/* BITÁCORA */}
         {vistaActual === "logs" && (
           <div style={styles.cardTable}>
             <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
@@ -214,7 +212,7 @@ function App() {
           </div>
         )}
 
-        {/* VISTA: GESTIÓN DE USUARIOS */}
+        {/* GESTIÓN DE USUARIOS (Vista corregida y separada) */}
         {vistaActual === "admin_usuarios" && (
           <div style={styles.cardTable}>
             <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
@@ -252,7 +250,30 @@ function App() {
           </div>
         )}
 
-        {/* VISTA: REGISTRO DE LIBROS */}
+        {/* INVENTARIO (Vista corregida y separada) */}
+        {vistaActual === "inventario" && (
+          <div style={styles.cardTable}>
+            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
+              <h2 style={styles.cardTitle}>Inventario Actual</h2>
+              <button onClick={() => setVistaActual("menu")} style={styles.btnBack}>Volver</button>
+            </div>
+            <table style={styles.table}>
+              <thead><tr style={styles.tableHead}><th>Código</th><th>Título</th><th>Autor</th><th>Estado</th></tr></thead>
+              <tbody>
+                {libros.map((l, i) => (
+                  <tr key={i} style={i % 2 === 0 ? styles.trEven : styles.trOdd}>
+                    <td style={styles.td}>{l.codigo}</td>
+                    <td style={styles.td}>{l.titulo}</td>
+                    <td style={styles.td}>{l.autor}</td>
+                    <td style={styles.td}><span style={styles.statusBadge}>{l.estado}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* REGISTRO DE LIBROS */}
         {vistaActual === "registro" && (
           !mostrarForm ? (
             <div style={styles.cardTable}>
@@ -270,31 +291,12 @@ function App() {
                 <option>Mueble 1 - Nivel 1</option>
                 <option>Mueble 1 - Nivel 2</option>
                 <option>Mueble 2 - Nivel 1</option>
+                <option>Mueble 2 - Nivel 2</option>
               </select>
               <button onClick={guardarLibro} style={{...styles.btnSave, marginTop:'10px'}}>Guardar</button>
               <button onClick={() => setMostrarForm(false)} style={{background:'none', border:'none', color:'#666', marginTop:'10px', cursor:'pointer'}}>Reintentar</button>
             </div>
           )
-        )}
-
-        {/* VISTA: INVENTARIO */}
-        {vistaActual === "inventario" && (
-          <div style={styles.cardTable}>
-            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
-              <h2 style={styles.cardTitle}>Inventario Actual</h2>
-              <button onClick={() => setVistaActual("menu")} style={styles.btnBack}>Volver</button>
-            </div>
-            <table style={styles.table}>
-              <thead><tr style={styles.tableHead}><th>Código</th><th>Título</th><th>Autor</th><th>Estado</th></tr></thead>
-              <tbody>
-                {libros.map((l, i) => (
-                  <tr key={i} style={i % 2 === 0 ? styles.trEven : styles.trOdd}>
-                    <td style={styles.td}>{l.codigo}</td><td style={styles.td}>{l.titulo}</td><td style={styles.td}>{l.autor}</td><td style={styles.td}>{l.estado}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         )}
       </main>
     </div>
@@ -313,7 +315,6 @@ const styles = {
   cardLogin: { backgroundColor: 'white', padding: '30px', borderRadius: '15px', maxWidth: '450px', margin: 'auto', textAlign: 'center', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' },
   menuGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' },
   menuItem: { backgroundColor: 'white', padding: '30px', borderRadius: '15px', textAlign: 'center', cursor: 'pointer', borderBottom: '6px solid #003366', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' },
-  // ESTILO PARA BOTONES GRISES (PRÓXIMAMENTE)
   menuItemDisabled: { backgroundColor: '#eeeeee', padding: '30px', borderRadius: '15px', textAlign: 'center', color: '#888888', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' },
   welcomeText: { gridColumn: '1/-1', textAlign: 'center', marginBottom: '10px' },
   icon: { fontSize: '45px', marginBottom: '10px', display: 'block' },
@@ -328,7 +329,8 @@ const styles = {
   btnSave: { backgroundColor: '#003366', color: 'white', padding: '12px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight:'bold' },
   btnBack: { backgroundColor: '#003366', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer' },
   btnLogOut: { gridColumn: '1/-1', marginTop: '20px', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', color: '#666' },
-  formSection: { marginBottom: '25px', padding: '20px', backgroundColor:'#f9f9f9', borderRadius: '12px' }
+  formSection: { marginBottom: '25px', padding: '20px', backgroundColor:'#f9f9f9', borderRadius: '12px' },
+  statusBadge: { backgroundColor: '#28a745', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px' }
 };
 
 export default App;
