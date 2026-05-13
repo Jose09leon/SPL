@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Html5QrcodeScanner } from "html5-qrcode";
 import logoVenado from './assets/LogoLSI.png';
 
@@ -17,7 +17,53 @@ function App() {
   const [nuevoUser, setNuevoUser] = useState({ nombre_completo: '', usuario: '', password: '' });
   const [credenciales, setCredenciales] = useState({ usuario: '', pass: '' });
 
-  // --- LÓGICA DE LOGIN (CON BYPASS LOCAL) ---
+  // --- LÓGICA DE CIERRE DE SESIÓN (Reutilizable) ---
+  const cerrarSesion = useCallback(() => {
+    setUser(null);
+    setVistaActual("login");
+    setCredenciales({ usuario: '', pass: '' });
+  }, []);
+
+  // --- TEMPORIZADOR DE INACTIVIDAD (5 MINUTOS) ---
+  useEffect(() => {
+    let timeoutId;
+
+    const reiniciarTemporizador = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+
+      // 300,000 ms = 5 minutos
+      timeoutId = setTimeout(() => {
+        // Verificamos si hay alguien logueado y NO es administrador
+        const esAdmin = credenciales.usuario.toLowerCase() === 'admin' || credenciales.usuario.toLowerCase() === 'ad';
+        
+        if (user && !esAdmin) {
+          alert("Tu sesión ha expirado por inactividad (5 minutos).");
+          cerrarSesion();
+        }
+      }, 300000); 
+    };
+
+    if (user) {
+      // Eventos que reinician el contador (actividad detectada)
+      const eventos = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
+      
+      eventos.forEach(evento => {
+        window.addEventListener(evento, reiniciarTemporizador);
+      });
+
+      reiniciarTemporizador(); // Iniciar el contador al entrar
+
+      return () => {
+        // Limpieza de eventos al cerrar sesión o desmontar
+        if (timeoutId) clearTimeout(timeoutId);
+        eventos.forEach(evento => {
+          window.removeEventListener(evento, reiniciarTemporizador);
+        });
+      };
+    }
+  }, [user, credenciales.usuario, cerrarSesion]);
+
+  // --- LÓGICA DE LOGIN ---
   const manejarLogin = async (e) => {
     e.preventDefault();
 
@@ -65,28 +111,19 @@ function App() {
     if (vistaActual === "logs") cargarLogs();
   }, [vistaActual]);
 
-  // --- LÓGICA DE USUARIO SUGERIDO: nombre.apellido ---
   const manejarCambioNombre = (e) => {
     const nombreCompleto = e.target.value;
     const partes = nombreCompleto.trim().split(/\s+/);
     let usuarioSugerido = "";
-
     if (partes.length >= 2) {
       usuarioSugerido = `${partes[0]}.${partes[1]}`.toLowerCase();
     } else if (partes.length === 1) {
       usuarioSugerido = partes[0].toLowerCase();
     }
-
     usuarioSugerido = usuarioSugerido.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    
-    setNuevoUser({
-      ...nuevoUser,
-      nombre_completo: nombreCompleto,
-      usuario: usuarioSugerido
-    });
+    setNuevoUser({ ...nuevoUser, nombre_completo: nombreCompleto, usuario: usuarioSugerido });
   };
 
-  // --- LÓGICA ESCÁNER QR ---
   useEffect(() => {
     const element = document.getElementById('reader');
     if (vistaActual === "registro" && !mostrarForm && element) {
@@ -140,34 +177,18 @@ function App() {
         {vistaActual === "menu" && (
           <div style={styles.menuGrid}>
             <div style={styles.welcomeText}><h3>Bienvenido, {user}</h3></div>
-            
-            <div style={styles.menuItem} onClick={() => setVistaActual("registro")}>
-              <span style={styles.icon}>📸</span><h3>Registro</h3><p>Escanear libros</p>
-            </div>
-            
-            <div style={styles.menuItem} onClick={() => setVistaActual("inventario")}>
-              <span style={styles.icon}>📊</span><h3>Inventario</h3><p>Lista completa</p>
-            </div>
-
-            <div style={styles.menuItemDisabled}>
-              <span style={styles.icon}>🤝</span><h3>Préstamos</h3><p>Próximamente</p>
-            </div>
-
-            <div style={styles.menuItemDisabled}>
-              <span style={styles.icon}>🔄</span><h3>Devoluciones</h3><p>Próximamente</p>
-            </div>
+            <div style={styles.menuItem} onClick={() => setVistaActual("registro")}><span style={styles.icon}>📸</span><h3>Registro</h3><p>Escanear libros</p></div>
+            <div style={styles.menuItem} onClick={() => setVistaActual("inventario")}><span style={styles.icon}>📊</span><h3>Inventario</h3><p>Lista completa</p></div>
+            <div style={styles.menuItemDisabled}><span style={styles.icon}>🤝</span><h3>Préstamos</h3><p>Próximamente</p></div>
+            <div style={styles.menuItemDisabled}><span style={styles.icon}>🔄</span><h3>Devoluciones</h3><p>Próximamente</p></div>
             
             {(credenciales.usuario.toLowerCase() === 'admin' || credenciales.usuario.toLowerCase() === 'ad') && (
               <>
-                <div style={{...styles.menuItem, borderBottom: '6px solid #ff8c00'}} onClick={() => setVistaActual("admin_usuarios")}>
-                  <span style={styles.icon}>⚙️</span><h3>Administración</h3><p>Gestionar Usuarios</p>
-                </div>
-                <div style={{...styles.menuItem, borderBottom: '6px solid #28a745'}} onClick={() => setVistaActual("logs")}>
-                  <span style={styles.icon}>📝</span><h3>Bitácora</h3><p>Ver Historial</p>
-                </div>
+                <div style={{...styles.menuItem, borderBottom: '6px solid #ff8c00'}} onClick={() => setVistaActual("admin_usuarios")}><span style={styles.icon}>⚙️</span><h3>Administración</h3><p>Gestionar Usuarios</p></div>
+                <div style={{...styles.menuItem, borderBottom: '6px solid #28a745'}} onClick={() => setVistaActual("logs")}><span style={styles.icon}>📝</span><h3>Bitácora</h3><p>Ver Historial</p></div>
               </>
             )}
-            <button onClick={() => { setUser(null); setVistaActual("login"); }} style={styles.btnLogOut}>Cerrar Sesión</button>
+            <button onClick={cerrarSesion} style={styles.btnLogOut}>Cerrar Sesión</button>
           </div>
         )}
 
@@ -200,9 +221,7 @@ function App() {
                   <tbody>
                     {logsLibros.map((l, i) => (
                       <tr key={i} style={i % 2 === 0 ? styles.trEven : styles.trOdd}>
-                        <td style={styles.td}>{l.usuario}</td>
-                        <td style={styles.td}>{l.detalles}</td>
-                        <td style={styles.td}>{new Date(l.fecha_hora || l.fecha).toLocaleString()}</td>
+                        <td style={styles.td}>{l.usuario}</td><td style={styles.td}>{l.detalles}</td><td style={styles.td}>{new Date(l.fecha_hora || l.fecha).toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -212,7 +231,7 @@ function App() {
           </div>
         )}
 
-        {/* GESTIÓN DE USUARIOS (Vista corregida y separada) */}
+        {/* GESTIÓN DE USUARIOS */}
         {vistaActual === "admin_usuarios" && (
           <div style={styles.cardTable}>
             <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
@@ -238,11 +257,9 @@ function App() {
               <thead><tr style={styles.tableHead}><th>Nombre Completo</th><th>Usuario</th><th>Acción</th></tr></thead>
               <tbody>
                 {usuarios.map((u, i) => (
-                  <tr key={i} style={u.usuario === 'admin' ? styles.trEven : styles.trOdd}>
+                  <tr key={i} style={styles.trOdd}>
                     <td style={styles.td}>{u.nombre_completo}</td><td style={styles.td}>{u.usuario}</td>
-                    <td style={styles.td}>
-                      {u.usuario !== 'admin' && <button style={{color:'red', border:'none', background:'none', cursor:'pointer'}} onClick={() => fetch(`https://10.19.11.249:3001/api/usuarios/${u.id}`, {method:'DELETE'}).then(() => cargarUsuarios())}>Eliminar</button>}
-                    </td>
+                    <td style={styles.td}>{u.usuario !== 'admin' && <button style={{color:'red', border:'none', background:'none', cursor:'pointer'}} onClick={() => fetch(`https://10.19.11.249:3001/api/usuarios/${u.id}`, {method:'DELETE'}).then(() => cargarUsuarios())}>Eliminar</button>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -250,7 +267,7 @@ function App() {
           </div>
         )}
 
-        {/* INVENTARIO (Vista corregida y separada) */}
+        {/* INVENTARIO */}
         {vistaActual === "inventario" && (
           <div style={styles.cardTable}>
             <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
@@ -262,10 +279,7 @@ function App() {
               <tbody>
                 {libros.map((l, i) => (
                   <tr key={i} style={i % 2 === 0 ? styles.trEven : styles.trOdd}>
-                    <td style={styles.td}>{l.codigo}</td>
-                    <td style={styles.td}>{l.titulo}</td>
-                    <td style={styles.td}>{l.autor}</td>
-                    <td style={styles.td}><span style={styles.statusBadge}>{l.estado}</span></td>
+                    <td style={styles.td}>{l.codigo}</td><td style={styles.td}>{l.titulo}</td><td style={styles.td}>{l.autor}</td><td style={styles.td}><span style={styles.statusBadge}>{l.estado}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -291,7 +305,6 @@ function App() {
                 <option>Mueble 1 - Nivel 1</option>
                 <option>Mueble 1 - Nivel 2</option>
                 <option>Mueble 2 - Nivel 1</option>
-                <option>Mueble 2 - Nivel 2</option>
               </select>
               <button onClick={guardarLibro} style={{...styles.btnSave, marginTop:'10px'}}>Guardar</button>
               <button onClick={() => setMostrarForm(false)} style={{background:'none', border:'none', color:'#666', marginTop:'10px', cursor:'pointer'}}>Reintentar</button>
