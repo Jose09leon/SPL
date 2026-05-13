@@ -4,57 +4,84 @@ import logoVenado from './assets/LogoLSI.png';
 
 function App() {
   const [user, setUser] = useState(null);
-  const [vistaActual, setVistaActual] = useState("login"); // login, menu, registro, inventario
+  const [vistaActual, setVistaActual] = useState("login");
   
   const [libros, setLibros] = useState([]);
+  const [usuarios, setUsuarios] = useState([]); 
+  const [logsAcceso, setLogsAcceso] = useState([]);
+  const [logsLibros, setLogsLibros] = useState([]);
   const [scannedCode, setScannedCode] = useState("");
   const [mostrarForm, setMostrarForm] = useState(false);
-  const [datosLibro, setDatosLibro] = useState({ titulo: '', autor: '', editorial: '', ubicacion: 'Mueble 1 - Nivel 1' });
-
-  // Credenciales capturadas del formulario
-  const [credenciales, setCredenciales] = useState({ usuario: '', pass: '' });
   
-  // --- CORRECCIÓN: LOGIN CONECTADO AL BACKEND ---
+  const [datosLibro, setDatosLibro] = useState({ titulo: '', autor: '', editorial: '', ubicacion: 'Mueble 1 - Nivel 1' });
+  const [nuevoUser, setNuevoUser] = useState({ nombre_completo: '', usuario: '', password: '' });
+  const [credenciales, setCredenciales] = useState({ usuario: '', pass: '' });
+
+  // --- LÓGICA DE LOGIN ---
   const manejarLogin = async (e) => {
     e.preventDefault();
-    
     try {
-      const respuesta = await fetch('http://10.19.11.249:3001/login', {
+      const respuesta = await fetch('https://10.19.11.249:3001/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          usuario: credenciales.usuario, 
-          password: credenciales.pass // Se envía como 'password' para el backend
-        })
+        body: JSON.stringify({ usuario: credenciales.usuario, password: credenciales.pass })
       });
-
       const datos = await respuesta.json();
-
       if (respuesta.ok && datos.auth) {
         setUser(datos.user.nombre_completo);
         setVistaActual("menu");
-        console.log("Login exitoso:", datos.user);
       } else {
-        alert(datos.message || "Usuario o contraseña incorrectos");
+        alert("Usuario o contraseña incorrectos");
       }
     } catch (error) {
-      console.error("Error de conexión:", error);
-      alert("No se pudo conectar con el servidor (Puerto 3001). Asegúrate de que el backend esté corriendo.");
+      alert("Error de conexión con el servidor.");
     }
   };
 
+  // --- CARGA DE DATOS ---
+  const cargarLogs = () => {
+    fetch('https://10.19.11.249:3001/api/logs-acceso').then(res => res.json()).then(data => setLogsAcceso(data));
+    fetch('https://10.19.11.249:3001/api/log-libros').then(res => res.json()).then(data => setLogsLibros(data));
+  };
+
+  const cargarUsuarios = () => {
+    fetch('https://10.19.11.249:3001/api/usuarios').then(res => res.json()).then(data => setUsuarios(data));
+  };
+
   const cargarLibros = () => {
-    // Nota: Cambiar a la URL completa si el proxy no está configurado
-    fetch('http://10.19.11.249:3001/api/libros')
-      .then(res => res.json())
-      .then(data => setLibros(data))
-      .catch(err => console.error("Error cargando libros:", err));
+    fetch('https://10.19.11.249:3001/api/libros').then(res => res.json()).then(data => setLibros(data));
   };
 
   useEffect(() => {
     if (vistaActual === "inventario") cargarLibros();
+    if (vistaActual === "admin_usuarios") cargarUsuarios();
+    if (vistaActual === "logs") cargarLogs();
   }, [vistaActual]);
 
+  // --- LÓGICA DE USUARIO sugerido: nombre.apellido ---
+  const manejarCambioNombre = (e) => {
+    const nombreCompleto = e.target.value;
+    const partes = nombreCompleto.trim().split(/\s+/);
+    let usuarioSugerido = "";
+
+    if (partes.length >= 2) {
+      // Formato: primerNombre.primerApellido
+      usuarioSugerido = `${partes[0]}.${partes[1]}`.toLowerCase();
+    } else if (partes.length === 1) {
+      usuarioSugerido = partes[0].toLowerCase();
+    }
+
+    // Limpiar acentos
+    usuarioSugerido = usuarioSugerido.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    
+    setNuevoUser({
+      ...nuevoUser,
+      nombre_completo: nombreCompleto,
+      usuario: usuarioSugerido
+    });
+  };
+
+  // --- ESCÁNER ---
   useEffect(() => {
     const element = document.getElementById('reader');
     if (vistaActual === "registro" && !mostrarForm && element) {
@@ -64,152 +91,172 @@ function App() {
         setMostrarForm(true);
         scanner.clear();
       }, () => {});
-      return () => { scanner.clear().catch(e => {}); };
+      return () => { scanner.clear().catch(() => {}); };
     }
   }, [vistaActual, mostrarForm]);
 
   const guardarLibro = () => {
-    fetch('http://10.19.11.249:3001/api/registrar-libro', {
+    fetch('https://10.19.11.249:3001/api/registrar-libro', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ codigo: scannedCode, ...datosLibro, estado: 'Disponible' })
+      body: JSON.stringify({ codigo: scannedCode, ...datosLibro, estado: 'Disponible', usuario_accion: user })
     }).then(() => {
-      alert("✅ Libro registrado con éxito");
+      alert("✅ Libro registrado");
       setMostrarForm(false);
-      setScannedCode("");
-      setDatosLibro({ 
-        titulo: '', 
-        autor: '', 
-        editorial: '', 
-        ubicacion: 'Mueble 1 - Nivel 1' 
-      });
-      setVistaActual("registro");
-    }).catch(err => alert("Error al guardar: " + err));
+      setVistaActual("menu");
+    });
   };
 
   return (
     <div style={styles.container}>
       <header style={styles.header}>
-        <div style={styles.topHeader}>
-          <img src={logoVenado} alt="Logo" style={styles.logoImg} />
-          <div style={styles.textContainer}>
-            <h1 style={styles.mainTitle}>TECNOLÓGICO NACIONAL DE MÉXICO</h1>
-            <h2 style={styles.subTitle}>INSTITUTO TECNOLÓGICO DE HERMOSILLO</h2>
-            <h3 style={styles.appTitle}>Biblioteca Laboratorio Sistemas</h3>
-          </div>
+        <img src={logoVenado} alt="Logo" style={styles.logoImg} />
+        <div style={styles.textContainer}>
+          <h1 style={styles.mainTitle}>TECNOLÓGICO NACIONAL DE MÉXICO</h1>
+          <h2 style={styles.subTitle}>INSTITUTO TECNOLÓGICO DE HERMOSILLO</h2>
+          <h3 style={styles.appTitle}>Biblioteca Laboratorio Sistemas</h3>
         </div>
       </header>
 
       <main style={styles.main}>
-        
-        {/* VISTA 1: LOGIN */}
+        {/* LOGIN */}
         {vistaActual === "login" && (
           <div style={styles.cardLogin}>
             <h2 style={styles.cardTitle}>Acceso al Sistema</h2>
             <form onSubmit={manejarLogin} style={styles.formGroup}>
-              <input 
-                style={styles.input} 
-                placeholder="Usuario" 
-                autoComplete="username"
-                onChange={e => setCredenciales({...credenciales, usuario: e.target.value})} 
-              />
-              <input 
-                type="password" 
-                style={styles.input} 
-                placeholder="Contraseña" 
-                autoComplete="current-password"
-                onChange={e => setCredenciales({...credenciales, pass: e.target.value})} 
-              />
+              <input style={styles.input} placeholder="Usuario" onChange={e => setCredenciales({...credenciales, usuario: e.target.value})} />
+              <input type="password" style={styles.input} placeholder="Contraseña" onChange={e => setCredenciales({...credenciales, pass: e.target.value})} />
               <button type="submit" style={styles.btnSave}>Entrar</button>
             </form>
           </div>
         )}
 
-        {/* VISTA 2: MENÚ (DASHBOARD) */}
+        {/* MENÚ PRINCIPAL */}
         {vistaActual === "menu" && (
           <div style={styles.menuGrid}>
-            <div style={styles.welcomeText}>
-                <h3>Bienvenido, {user}</h3>
-            </div>
+            <div style={styles.welcomeText}><h3>Bienvenido, {user}</h3></div>
             <div style={styles.menuItem} onClick={() => setVistaActual("registro")}>
-              <span style={styles.icon}>📸</span>
-              <h3>Registro</h3>
-              <p>Escanear nuevos libros</p>
+              <span style={styles.icon}>📸</span><h3>Registro</h3><p>Escanear libros</p>
             </div>
             <div style={styles.menuItem} onClick={() => setVistaActual("inventario")}>
-              <span style={styles.icon}>📊</span>
-              <h3>Inventario</h3>
-              <p>Ver lista completa</p>
+              <span style={styles.icon}>📊</span><h3>Inventario</h3><p>Lista completa</p>
             </div>
-            <div style={styles.menuItemDisabled}>
-              <span style={styles.icon}>🤝</span>
-              <h3>Préstamos</h3>
-              <p>Próximamente</p>
-            </div>
-            <div style={styles.menuItemDisabled}>
-              <span style={styles.icon}>🔄</span>
-              <h3>Devoluciones</h3>
-              <p>Próximamente</p>
-            </div>
+            
+            {credenciales.usuario.toLowerCase() === 'admin' && (
+              <>
+                <div style={{...styles.menuItem, borderBottom: '6px solid #ff8c00'}} onClick={() => setVistaActual("admin_usuarios")}>
+                  <span style={styles.icon}>⚙️</span><h3>Administración</h3><p>Gestionar Usuarios</p>
+                </div>
+                <div style={{...styles.menuItem, borderBottom: '6px solid #28a745'}} onClick={() => setVistaActual("logs")}>
+                  <span style={styles.icon}>📝</span><h3>Bitácora</h3><p>Ver Historial</p>
+                </div>
+              </>
+            )}
             <button onClick={() => { setUser(null); setVistaActual("login"); }} style={styles.btnLogOut}>Cerrar Sesión</button>
           </div>
         )}
 
-        {/* VISTA 3: INVENTARIO */}
-        {vistaActual === "inventario" && (
+        {/* BITÁCORA */}
+        {vistaActual === "logs" && (
           <div style={styles.cardTable}>
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
-              <h2 style={styles.cardTitle}>Inventario Actual</h2>
-              <button onClick={() => setVistaActual("menu")} style={styles.btnBack}>Volver al Menú</button>
+            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
+              <h2 style={styles.cardTitle}>Bitácora del Sistema</h2>
+              <button onClick={() => setVistaActual("menu")} style={styles.btnBack}>Volver</button>
+            </div>
+            <div style={{display:'grid', gridTemplateColumns: '1fr 1fr', gap:'20px'}}>
+              <div>
+                <h4 style={{color:'#003366'}}>Accesos (Login)</h4>
+                <table style={styles.table}>
+                  <thead><tr style={styles.tableHead}><th>Usuario</th><th>Fecha</th></tr></thead>
+                  <tbody>
+                    {logsAcceso.map((l, i) => (
+                      <tr key={i} style={i % 2 === 0 ? styles.trEven : styles.trOdd}>
+                        <td style={styles.td}>{l.nombre_usuario || l.usuario}</td>
+                        <td style={styles.td}>{new Date(l.fecha_hora || l.fecha).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <h4 style={{color:'#003366'}}>Movimientos de Libros</h4>
+                <table style={styles.table}>
+                  <thead><tr style={styles.tableHead}><th>Admin</th><th>Detalles</th><th>Fecha</th></tr></thead>
+                  <tbody>
+                    {logsLibros.map((l, i) => (
+                      <tr key={i} style={i % 2 === 0 ? styles.trEven : styles.trOdd}>
+                        <td style={styles.td}>{l.usuario}</td>
+                        <td style={styles.td}>{l.detalles}</td>
+                        <td style={styles.td}>{new Date(l.fecha_hora || l.fecha).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* GESTIÓN DE USUARIOS */}
+        {vistaActual === "admin_usuarios" && (
+          <div style={styles.cardTable}>
+            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
+              <h2 style={styles.cardTitle}>Gestión de Usuarios</h2>
+              <button onClick={() => setVistaActual("menu")} style={styles.btnBack}>Volver</button>
+            </div>
+            <div style={styles.formSection}>
+              <h4>+ Agregar Nuevo Personal</h4>
+              <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
+                <input style={styles.input} placeholder="Nombre Completo" value={nuevoUser.nombre_completo} onChange={manejarCambioNombre} />
+                <input style={styles.input} placeholder="Usuario" value={nuevoUser.usuario} onChange={e => setNuevoUser({...nuevoUser, usuario: e.target.value})} />
+                <input type="password" style={styles.input} placeholder="Contraseña" value={nuevoUser.password} onChange={e => setNuevoUser({...nuevoUser, password: e.target.value})} />
+                <button style={{...styles.btnSave, width:'auto', backgroundColor:'#28a745'}} onClick={() => {
+                   fetch('https://10.19.11.249:3001/api/usuarios', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(nuevoUser)
+                  }).then(() => { alert("Usuario Creado"); cargarUsuarios(); setNuevoUser({nombre_completo:'', usuario:'', password:''}); });
+                }}>Guardar</button>
+              </div>
             </div>
             <table style={styles.table}>
-              <thead>
-                <tr style={styles.tableHead}>
-                  <th>Código</th><th>Título</th><th>Autor</th><th>Ubicación</th><th>Estado</th>
-                </tr>
-              </thead>
+              <thead><tr style={styles.tableHead}><th>Nombre Completo</th><th>Usuario</th><th>Acción</th></tr></thead>
               <tbody>
-                {libros.length > 0 ? libros.map((l, i) => (
-                  <tr key={i} style={i % 2 === 0 ? styles.trEven : styles.trOdd}>
-                    <td style={styles.td}>{l.codigo}</td>
-                    <td style={styles.td}>{l.titulo}</td>
-                    <td style={styles.td}>{l.autor}</td>
-                    <td style={styles.td}>{l.ubicacion}</td>
-                    <td style={styles.td}><span style={styles.statusBadge}>{l.estado}</span></td>
+                {usuarios.map((u, i) => (
+                  <tr key={i} style={styles.trOdd}>
+                    <td style={styles.td}>{u.nombre_completo}</td>
+                    <td style={styles.td}>{u.usuario}</td>
+                    <td style={styles.td}>
+                      {u.usuario !== 'admin' && <button style={{color:'red', border:'none', background:'none', cursor:'pointer'}} onClick={() => fetch(`https://10.19.11.249:3001/api/usuarios/${u.id}`, {method:'DELETE'}).then(() => cargarUsuarios())}>Eliminar</button>}
+                    </td>
                   </tr>
-                )) : (
-                    <tr><td colSpan="5" style={{textAlign:'center', padding:'20px'}}>No hay libros registrados.</td></tr>
-                )}
+                ))}
               </tbody>
             </table>
           </div>
         )}
 
-        {/* VISTA 4: REGISTRO (ESCÁNER) */}
+        {/* REGISTRO DE LIBROS */}
         {vistaActual === "registro" && (
           !mostrarForm ? (
-            <div style={styles.card}>
-              <button onClick={() => setVistaActual("menu")} style={styles.btnBack}>← Cancelar</button>
+            <div style={styles.cardTable}>
+              <button onClick={() => setVistaActual("menu")} style={styles.btnBack}>← Volver</button>
               <div id="reader" style={{marginTop:'20px'}}></div>
             </div>
           ) : (
-            <div style={styles.cardForm}>
-              <h2 style={styles.cardTitle}>Datos del Libro</h2>
-              <div style={styles.formGroup}>
-                <p style={styles.codeText}>Código: {scannedCode}</p>
-                <input style={styles.input} placeholder="Título" onChange={e => setDatosLibro({...datosLibro, titulo: e.target.value})} />
-                <input style={styles.input} placeholder="Autor" onChange={e => setDatosLibro({...datosLibro, autor: e.target.value})} />
-                <select style={styles.input} onChange={e => setDatosLibro({...datosLibro, ubicacion: e.target.value})}>
-                  <option>Mueble 1 - Nivel 1</option>
-                  <option>Mueble 1 - Nivel 2</option>
-                  <option>Mueble 2 - Nivel 1</option>
-                  <option>Mueble 2 - Nivel 2</option>
-                  <option>Mueble 3 - Nivel 1</option>
-                  <option>Mueble 3 - Nivel 2</option>
-                </select>
-              </div>
-              <button onClick={guardarLibro} style={styles.btnSave}>Guardar</button>
-              <button onClick={() => setMostrarForm(false)} style={styles.btnCancel}>Reintentar Escaneo</button>
+            <div style={styles.cardLogin}>
+              <h2>Detalles del Libro</h2>
+              <p>Código: {scannedCode}</p>
+              <input style={styles.input} placeholder="Título" onChange={e => setDatosLibro({...datosLibro, titulo: e.target.value})} />
+              <input style={styles.input} placeholder="Autor" onChange={e => setDatosLibro({...datosLibro, autor: e.target.value})} />
+              <input style={styles.input} placeholder="Editorial" onChange={e => setDatosLibro({...datosLibro, editorial: e.target.value})} />
+              <select style={styles.input} value={datosLibro.ubicacion} onChange={e => setDatosLibro({...datosLibro, ubicacion: e.target.value})}>
+                <option>Mueble 1 - Nivel 1</option>
+                <option>Mueble 1 - Nivel 2</option>
+                <option>Mueble 2 - Nivel 1</option>
+              </select>
+              <button onClick={guardarLibro} style={{...styles.btnSave, marginTop:'10px'}}>Guardar</button>
+              <button onClick={() => setMostrarForm(false)} style={{background:'none', border:'none', color:'#666', marginTop:'10px', cursor:'pointer'}}>Reintentar</button>
             </div>
           )
         )}
@@ -218,40 +265,32 @@ function App() {
   );
 }
 
-// Estilos se mantienen igual
 const styles = {
-  container: { minHeight: '100vh', backgroundColor: '#f4f6f9', fontFamily: '"Segoe UI", sans-serif' },
-  header: { backgroundColor: '#003366', padding: '20px', color: 'white', textAlign: 'center' },
-  topHeader: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px' },
-  logoImg: { height: '80px' },
-  textContainer: { textAlign: 'left' },
-  mainTitle: { margin: 0, fontSize: '14px' },
-  subTitle: { margin: 0, fontSize: '11px', color: '#ccc' },
-  appTitle: { margin: '5px 0 0 0', fontSize: '22px', fontWeight: 'bold' },
-  main: { padding: '30px 20px', maxWidth: '1100px', margin: 'auto' },
-  cardLogin: { backgroundColor: 'white', padding: '40px', borderRadius: '15px', maxWidth: '400px', margin: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', textAlign:'center' },
-  welcomeText: { gridColumn: '1 / -1', textAlign: 'center', marginBottom: '10px', color: '#003366' },
-  menuGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '25px' },
-  menuItem: { backgroundColor: 'white', padding: '40px', borderRadius: '15px', textAlign: 'center', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.05)', transition: '0.3s', borderBottom: '6px solid #003366' },
-  menuItemDisabled: { backgroundColor: '#eee', padding: '40px', borderRadius: '15px', textAlign: 'center', color: '#888' },
-  icon: { fontSize: '45px', display: 'block', marginBottom: '15px' },
-  cardTable: { backgroundColor: 'white', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' },
-  cardTitle: { borderBottom: '3px solid #003366', display: 'inline-block', paddingBottom: '5px', color: '#003366' },
-  table: { width: '100%', borderCollapse: 'collapse', marginTop: '10px' },
+  container: { minHeight: '100vh', backgroundColor: '#f4f6f9', fontFamily: 'Segoe UI, sans-serif' },
+  header: { backgroundColor: '#003366', color: 'white', padding: '20px', textAlign: 'center' },
+  logoImg: { height: '80px', marginBottom:'10px' },
+  textContainer: { textAlign: 'center' },
+  mainTitle: { fontSize: '14px', margin: 0 },
+  subTitle: { fontSize: '11px', margin: 0, color: '#ccc' },
+  appTitle: { fontSize: '22px', margin: '5px 0 0 0', fontWeight:'bold' },
+  main: { padding: '20px', maxWidth: '1200px', margin: 'auto' },
+  cardLogin: { backgroundColor: 'white', padding: '30px', borderRadius: '15px', maxWidth: '400px', margin: 'auto', textAlign: 'center', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' },
+  menuGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' },
+  menuItem: { backgroundColor: 'white', padding: '30px', borderRadius: '15px', textAlign: 'center', cursor: 'pointer', borderBottom: '6px solid #003366', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' },
+  welcomeText: { gridColumn: '1/-1', textAlign: 'center', marginBottom: '10px' },
+  icon: { fontSize: '45px', marginBottom: '10px', display: 'block' },
+  cardTable: { backgroundColor: 'white', padding: '25px', borderRadius: '15px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' },
+  cardTitle: { borderBottom: '3px solid #003366', display:'inline-block', paddingBottom:'5px', color:'#003366' },
+  table: { width: '100%', borderCollapse: 'collapse', marginTop:'10px' },
   tableHead: { backgroundColor: '#003366', color: 'white', textAlign: 'left' },
-  td: { padding: '15px', borderBottom: '1px solid #eee' },
+  td: { padding: '12px', borderBottom: '1px solid #eee', fontSize: '13px' },
   trEven: { backgroundColor: '#f9f9f9' },
   trOdd: { backgroundColor: '#fff' },
-  statusBadge: { backgroundColor: '#e7f3ff', color: '#0056b3', padding: '5px 12px', borderRadius: '20px', fontWeight: 'bold', fontSize: '12px' },
-  btnBack: { backgroundColor: '#003366', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' },
-  btnLogOut: { gridColumn: '1 / -1', background: 'none', border: 'none', color: '#666', textDecoration: 'underline', cursor: 'pointer', marginTop: '20px' },
-  formGroup: { display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px' },
-  input: { padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '16px' },
-  btnSave: { backgroundColor: '#003366', color: 'white', padding: '15px', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' },
-  codeText: { background: '#f0f0f0', padding: '10px', borderRadius: '5px', fontWeight: 'bold' },
-  btnCancel: { background: 'none', border: 'none', color: '#888', textDecoration: 'underline', cursor: 'pointer' },
-  card: { backgroundColor: 'white', padding: '20px', borderRadius: '15px' },
-  cardForm: { backgroundColor: 'white', padding: '30px', borderRadius: '15px', maxWidth: '500px', margin: 'auto' }
+  input: { padding: '12px', borderRadius: '8px', border: '1px solid #ccc', marginBottom: '10px', width: '100%', boxSizing: 'border-box' },
+  btnSave: { backgroundColor: '#003366', color: 'white', padding: '12px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight:'bold' },
+  btnBack: { backgroundColor: '#003366', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer' },
+  btnLogOut: { gridColumn: '1/-1', marginTop: '20px', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', color: '#666' },
+  formSection: { marginBottom: '25px', padding: '20px', backgroundColor:'#f9f9f9', borderRadius: '12px' }
 };
 
 export default App;
