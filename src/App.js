@@ -17,7 +17,7 @@ function App() {
   const [nuevoUser, setNuevoUser] = useState({ nombre_completo: '', usuario: '', password: '' });
   const [credenciales, setCredenciales] = useState({ usuario: '', pass: '' });
 
-  // --- MÓDULO DE PRÉSTAMOS (Se añade campo 'carrera' y 'tituloLibro') ---
+  // --- MÓDULO DE PRÉSTAMOS ---
   const [datosPrestamo, setDatosPrestamo] = useState({ alumno: '', matricula: '', carrera: '' });
   const [tituloLibroDetectado, setTituloLibroDetectado] = useState("");
   const [codigoManual, setCodigoManual] = useState("");
@@ -118,27 +118,27 @@ function App() {
     setNuevoUser({ ...nuevoUser, nombre_completo: nombreCompleto, usuario: usuarioSugerido });
   };
 
-  // --- VALIDACIÓN ESTRICTA DE EXISTENCIA DE LIBRO ---
+  // --- VALIDACIÓN DE EXISTENCIA DE LIBRO EN LA BASE DE DATOS ---
   const validarYProcederLibro = async (codigo) => {
     try {
       const respuesta = await fetch(`https://10.19.11.249:3001/api/verificar-libro/${codigo}`);
       const data = await respuesta.json();
       
       if (!respuesta.ok || !data.existe) {
-        alert(`❌ ERROR: El libro con código "${codigo}" NO existe en la base de datos. Registro cancelado.`);
+        alert(`❌ ERROR: El libro con código "${codigo}" NO existe en la base de datos. Operación cancelada.`);
         return;
       }
       
-      // Si el libro sí existe, guardamos los datos y avanzamos
+      // Si el libro existe, configuramos los estados y abrimos el formulario
       setScannedCode(codigo);
       setTituloLibroDetectado(data.libro.titulo);
       setMostrarForm(true);
     } catch (error) {
-      alert("Error al conectar con el servidor para validar el libro.");
+      alert("Error de conexión con el servidor al validar el libro.");
     }
   };
 
-  // --- BÚSQUEDA AUTOMÁTICA DE ALUMNO ---
+  // --- BÚSQUEDA AUTOMÁTICA DE ALUMNO POR MATRÍCULA ---
   const buscarAlumnoPorMatricula = async () => {
     if (!datosPrestamo.matricula.trim()) {
       alert("⚠️ Ingresa una matrícula para buscar.");
@@ -153,7 +153,6 @@ function App() {
         return;
       }
       
-      // Auto-rellenar campos obtenidos del backend
       setDatosPrestamo({
         ...datosPrestamo,
         alumno: data.alumno.nombre,
@@ -165,20 +164,24 @@ function App() {
     }
   };
 
-  // --- ESCÁNER QR ---
+  // --- ESCÁNER QR MODIFICADO PARA COMPORTAMIENTO ASÍNCRONO SEGURO ---
   useEffect(() => {
     const element = document.getElementById('reader');
     if ((vistaActual === "registro" || vistaActual === "prestamos") && !mostrarForm && element) {
       const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-      scanner.render((text) => {
+      
+      scanner.render(async (text) => {
+        const codigoLimpio = text.trim();
         if (vistaActual === "prestamos") {
-          validarYProcederLibro(text.trim());
+          await scanner.clear().catch(() => {});
+          validarYProcederLibro(codigoLimpio);
         } else {
-          setScannedCode(text);
+          await scanner.clear().catch(() => {});
+          setScannedCode(codigoLinter);
           setMostrarForm(true);
         }
-        scanner.clear();
       }, () => {});
+      
       return () => { scanner.clear().catch(() => {}); };
     }
   }, [vistaActual, mostrarForm]);
@@ -457,7 +460,6 @@ function App() {
                 <p style={{margin: 0}}><strong>Título:</strong> {tituloLibroDetectado}</p>
               </div>
               
-              {/* Sección de número de control con botón de búsqueda integrado */}
               <div style={{display: 'flex', gap: '10px', marginBottom: '10px'}}>
                 <input 
                   style={{...styles.input, marginBottom: 0}} 
@@ -474,7 +476,6 @@ function App() {
                 </button>
               </div>
 
-              {/* Campos auto-rellenables (pero editables por si acaso) */}
               <input 
                 style={styles.input} 
                 placeholder="Nombre Completo del Alumno" 
@@ -488,7 +489,7 @@ function App() {
                 onChange={e => setDatosPrestamo({...datosPrestamo, carrera: e.target.value})} 
               />
 
-              <button style={{...styles.btnSave, marginTop:'10px', width: '100%'} } onClick={procesarPrestamo}>
+              <button style={{...styles.btnSave, marginTop:'10px', width: '100%'}} onClick={procesarPrestamo}>
                 Confirmar Salida
               </button>
               
