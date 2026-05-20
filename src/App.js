@@ -63,8 +63,17 @@ function App() {
     }
   }, [user, credenciales.usuario, cerrarSesion]);
 
-  // --- LÓGICA DE LOGIN ---
+  // --- LÓGICA DE LOGIN (REPARADA Y CON ASYNC) ---
+  const manejarLogin = async (e) => {
+    e.preventDefault();
 
+    // Bypass para el administrador local
+    if (credenciales.usuario === 'ad' && credenciales.pass === '12345') {
+      setUser("Administrador Local");
+      setVistaActual("menu");
+      return; 
+    }
+    
     try {
       const respuesta = await fetch('https://10.19.11.249:3001/api/login', {
         method: 'POST',
