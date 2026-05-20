@@ -64,14 +64,6 @@ function App() {
   }, [user, credenciales.usuario, cerrarSesion]);
 
   // --- LÓGICA DE LOGIN ---
-  const manejarLogin = async (e) => {
-    e.preventDefault();
-
-    if (credenciales.usuario === 'ad' && credenciales.pass === '12345') {
-      setUser("Administrador Local");
-      setVistaActual("menu");
-      return; 
-    }
 
     try {
       const respuesta = await fetch('https://10.19.11.249:3001/api/login', {
@@ -305,6 +297,9 @@ function App() {
                 <option>Mueble 1 - Nivel 1</option>
                 <option>Mueble 1 - Nivel 2</option>
                 <option>Mueble 2 - Nivel 1</option>
+                <option>Mueble 2 - Nivel 2</option>
+                <option>Mueble 3 - Nivel 1</option>
+                <option>Mueble 3 - Nivel 2</option>
               </select>
               <button onClick={guardarLibro} style={{...styles.btnSave, marginTop:'10px'}}>Guardar</button>
               <button onClick={() => setMostrarForm(false)} style={{background:'none', border:'none', color:'#666', marginTop:'10px', cursor:'pointer'}}>Reintentar</button>
