@@ -17,7 +17,10 @@ function App() {
   const [nuevoUser, setNuevoUser] = useState({ nombre_completo: '', usuario: '', password: '' });
   const [credenciales, setCredenciales] = useState({ usuario: '', pass: '' });
 
-  // --- LÓGICA DE CIERRE DE SESIÓN (Reutilizable) ---
+  // --- MÓDULO DE PRÉSTAMOS ---
+  const [datosPrestamo, setDatosPrestamo] = useState({ alumno: '', matricula: '' });
+
+  // --- LÓGICA DE CIERRE DE SESIÓN ---
   const cerrarSesion = useCallback(() => {
     setUser(null);
     setVistaActual("login");
@@ -31,11 +34,8 @@ function App() {
     const reiniciarTemporizador = () => {
       if (timeoutId) clearTimeout(timeoutId);
 
-      // 300,000 ms = 5 minutos
       timeoutId = setTimeout(() => {
-        // Verificamos si hay alguien logueado y NO es administrador
         const esAdmin = credenciales.usuario.toLowerCase() === 'admin' || credenciales.usuario.toLowerCase() === 'ad';
-        
         if (user && !esAdmin) {
           alert("Tu sesión ha expirado por inactividad (5 minutos).");
           cerrarSesion();
@@ -44,30 +44,21 @@ function App() {
     };
 
     if (user) {
-      // Eventos que reinician el contador (actividad detectada)
       const eventos = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
-      
-      eventos.forEach(evento => {
-        window.addEventListener(evento, reiniciarTemporizador);
-      });
-
-      reiniciarTemporizador(); // Iniciar el contador al entrar
+      eventos.forEach(evento => window.addEventListener(evento, reiniciarTemporizador));
+      reiniciarTemporizador();
 
       return () => {
-        // Limpieza de eventos al cerrar sesión o desmontar
         if (timeoutId) clearTimeout(timeoutId);
-        eventos.forEach(evento => {
-          window.removeEventListener(evento, reiniciarTemporizador);
-        });
+        eventos.forEach(evento => window.removeEventListener(evento, reiniciarTemporizador));
       };
     }
   }, [user, credenciales.usuario, cerrarSesion]);
 
-  // --- LÓGICA DE LOGIN (REPARADA Y CON ASYNC) ---
+  // --- LÓGICA DE LOGIN ---
   const manejarLogin = async (e) => {
     e.preventDefault();
 
-    // Bypass para el administrador local
     if (credenciales.usuario === 'ad' && credenciales.pass === '12345') {
       setUser("Administrador Local");
       setVistaActual("menu");
@@ -125,9 +116,10 @@ function App() {
     setNuevoUser({ ...nuevoUser, nombre_completo: nombreCompleto, usuario: usuarioSugerido });
   };
 
+  // --- ESCÁNER QR ---
   useEffect(() => {
     const element = document.getElementById('reader');
-    if (vistaActual === "registro" && !mostrarForm && element) {
+    if ((vistaActual === "registro" || vistaActual === "prestamos") && !mostrarForm && element) {
       const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
       scanner.render((text) => {
         setScannedCode(text);
@@ -139,12 +131,59 @@ function App() {
   }, [vistaActual, mostrarForm]);
 
   const guardarLibro = () => {
+    if (!datosLibro.titulo.trim() || !datosLibro.autor.trim() || !datosLibro.editorial.trim()) {
+      alert("⚠️ No puedes dejar campos del libro en blanco");
+      return;
+    }
+
     fetch('https://10.19.11.249:3001/api/registrar-libro', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ codigo: scannedCode, ...datosLibro, estado: 'Disponible', usuario_accion: user })
     }).then(() => {
       alert("✅ Libro registrado");
+      setMostrarForm(false);
+      setVistaActual("menu");
+    });
+  };
+
+  // --- GUARDAR NUEVO USUARIO (CON CANDADO PARA ENTRADAS EN BLANCO) ---
+  const guardarUsuario = () => {
+    if (!nuevoUser.nombre_completo.trim() || !nuevoUser.usuario.trim() || !nuevoUser.password.trim()) {
+      alert("⚠️ Todos los campos son obligatorios. No se aceptan registros vacíos.");
+      return;
+    }
+
+    fetch('https://10.19.11.249:3001/api/usuarios', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(nuevoUser)
+    }).then(() => {
+      alert("🎉 Usuario Creado");
+      cargarUsuarios();
+      setNuevoUser({ nombre_completo: '', usuario: '', password: '' });
+    });
+  };
+
+  // --- PROCESAR EL PRÉSTAMO ---
+  const procesarPrestamo = () => {
+    if (!datosPrestamo.alumno.trim() || !datosPrestamo.matricula.trim()) {
+      alert("⚠️ Por favor llena todos los campos del alumno");
+      return;
+    }
+    
+    fetch('https://10.19.11.249:3001/api/prestar-libro', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        codigo: scannedCode, 
+        alumno: datosPrestamo.alumno, 
+        matricula: datosPrestamo.matricula, 
+        usuario_accion: user 
+      })
+    }).then(() => {
+      alert("✅ Préstamo procesado con éxito");
+      setDatosPrestamo({ alumno: '', matricula: '' });
       setMostrarForm(false);
       setVistaActual("menu");
     });
@@ -180,7 +219,12 @@ function App() {
             <div style={styles.welcomeText}><h3>Bienvenido, {user}</h3></div>
             <div style={styles.menuItem} onClick={() => setVistaActual("registro")}><span style={styles.icon}>📸</span><h3>Registro</h3><p>Escanear libros</p></div>
             <div style={styles.menuItem} onClick={() => setVistaActual("inventario")}><span style={styles.icon}>📊</span><h3>Inventario</h3><p>Lista completa</p></div>
-            <div style={styles.menuItemDisabled}><span style={styles.icon}>🤝</span><h3>Préstamos</h3><p>Próximamente</p></div>
+            
+            {/* VISTA PRESTAMOS YA HABILITADA */}
+            <div style={styles.menuItem} onClick={() => { setVistaActual("prestamos"); setMostrarForm(false); setScannedCode(""); }}>
+              <span style={styles.icon}>🤝</span><h3>Préstamos</h3><p>Registrar salidas</p>
+            </div>
+            
             <div style={styles.menuItemDisabled}><span style={styles.icon}>🔄</span><h3>Devoluciones</h3><p>Próximamente</p></div>
             
             {(credenciales.usuario.toLowerCase() === 'admin' || credenciales.usuario.toLowerCase() === 'ad') && (
@@ -245,13 +289,7 @@ function App() {
                 <input style={styles.input} placeholder="Nombre Completo" value={nuevoUser.nombre_completo} onChange={manejarCambioNombre} />
                 <input style={styles.input} placeholder="Usuario" value={nuevoUser.usuario} onChange={e => setNuevoUser({...nuevoUser, usuario: e.target.value})} />
                 <input type="password" style={styles.input} placeholder="Contraseña" value={nuevoUser.password} onChange={e => setNuevoUser({...nuevoUser, password: e.target.value})} />
-                <button style={{...styles.btnSave, width:'auto', backgroundColor:'#28a745'}} onClick={() => {
-                   fetch('https://10.19.11.249:3001/api/usuarios', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(nuevoUser)
-                  }).then(() => { alert("Usuario Creado"); cargarUsuarios(); setNuevoUser({nombre_completo:'', usuario:'', password:''}); });
-                }}>Guardar</button>
+                <button style={{...styles.btnSave, width:'auto', backgroundColor:'#28a745'}} onClick={guardarUsuario}>Guardar</button>
               </div>
             </div>
             <table style={styles.table}>
@@ -312,6 +350,33 @@ function App() {
               </select>
               <button onClick={guardarLibro} style={{...styles.btnSave, marginTop:'10px'}}>Guardar</button>
               <button onClick={() => setMostrarForm(false)} style={{background:'none', border:'none', color:'#666', marginTop:'10px', cursor:'pointer'}}>Reintentar</button>
+            </div>
+          )
+        )}
+
+        {/* INTERFAZ DEL FLUJO DE PRÉSTAMOS */}
+        {vistaActual === "prestamos" && (
+          !mostrarForm ? (
+            <div style={styles.cardTable}>
+              <button onClick={() => setVistaActual("menu")} style={styles.btnBack}>← Volver</button>
+              <h3 style={{marginTop: '15px', color: '#003366'}}>Paso 1: Escanea el código QR del libro a prestar</h3>
+              <div id="reader" style={{marginTop:'20px'}}></div>
+            </div>
+          ) : (
+            <div style={styles.cardLogin}>
+              <h2 style={styles.cardTitle}>Registrar Préstamo</h2>
+              <p style={{margin: '15px 0', fontWeight: 'bold'}}>Libro Escaneado: {scannedCode}</p>
+              
+              <input style={styles.input} placeholder="Nombre Completo del Alumno" onChange={e => setDatosPrestamo({...datosPrestamo, alumno: e.target.value})} />
+              <input style={styles.input} placeholder="Número de Control / Matrícula" onChange={e => setDatosPrestamo({...datosPrestamo, matricula: e.target.value})} />
+
+              <button style={{...styles.btnSave, marginTop:'10px', width: '100%'}} onClick={procesarPrestamo}>
+                Confirmar Salida
+              </button>
+              
+              <button onClick={() => setMostrarForm(false)} style={{background:'none', border:'none', color:'#666', marginTop:'15px', cursor:'pointer', textDecoration: 'underline'}}>
+                Escanear otro libro
+              </button>
             </div>
           )
         )}
