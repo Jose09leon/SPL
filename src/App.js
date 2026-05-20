@@ -19,6 +19,8 @@ function App() {
 
   // --- MÓDULO DE PRÉSTAMOS ---
   const [datosPrestamo, setDatosPrestamo] = useState({ alumno: '', matricula: '' });
+  // Estado local para capturar el código ingresado por teclado
+  const [codigoManual, setCodigoManual] = useState("");
 
   // --- LÓGICA DE CIERRE DE SESIÓN ---
   const cerrarSesion = useCallback(() => {
@@ -189,6 +191,17 @@ function App() {
     });
   };
 
+  // Lógica auxiliar para procesar el código introducido manualmente
+  const procesarCodigoManual = () => {
+    if (!codigoManual.trim()) {
+      alert("⚠️ Debes ingresar un código válido");
+      return;
+    }
+    setScannedCode(codigoManual.trim());
+    setCodigoManual(""); // Limpiar el campo
+    setMostrarForm(true);
+  };
+
   return (
     <div style={styles.container}>
       <header style={styles.header}>
@@ -221,7 +234,7 @@ function App() {
             <div style={styles.menuItem} onClick={() => setVistaActual("inventario")}><span style={styles.icon}>📊</span><h3>Inventario</h3><p>Lista completa</p></div>
             
             {/* VISTA PRESTAMOS YA HABILITADA */}
-            <div style={styles.menuItem} onClick={() => { setVistaActual("prestamos"); setMostrarForm(false); setScannedCode(""); }}>
+            <div style={styles.menuItem} onClick={() => { setVistaActual("prestamos"); setMostrarForm(false); setScannedCode(""); setCodigoManual(""); }}>
               <span style={styles.icon}>🤝</span><h3>Préstamos</h3><p>Registrar salidas</p>
             </div>
             
@@ -359,13 +372,48 @@ function App() {
           !mostrarForm ? (
             <div style={styles.cardTable}>
               <button onClick={() => setVistaActual("menu")} style={styles.btnBack}>← Volver</button>
-              <h3 style={{marginTop: '15px', color: '#003366'}}>Paso 1: Escanea el código QR del libro a prestar</h3>
+              <h3 style={{marginTop: '15px', color: '#003366'}}>Paso 1: Escanea el QR del libro o ingrésalo manualmente</h3>
+              
+              {/* Contenedor de la cámara */}
               <div id="reader" style={{marginTop:'20px'}}></div>
+              
+              {/* Bloque para entrada alternativa por teclado */}
+              <div style={{
+                marginTop: '30px', 
+                padding: '20px', 
+                borderTop: '2px dashed #ccc', 
+                textAlign: 'center',
+                backgroundColor: '#f9f9f9',
+                borderRadius: '8px'
+              }}>
+                <label style={{display: 'block', marginBottom: '10px', fontWeight: 'bold', color: '#555'}}>
+                  ¿No funciona la cámara? Digita el código de barras/QR:
+                </label>
+                <div style={{display: 'flex', gap: '10px', maxWidth: '400px', margin: '0 auto'}}>
+                  <input 
+                    style={{...styles.input, marginBottom: 0}} 
+                    placeholder="Escribe el código aquí..." 
+                    value={codigoManual}
+                    onChange={e => setCodigoManual(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        procesarCodigoManual();
+                      }
+                    }}
+                  />
+                  <button 
+                    style={{...styles.btnSave, width: 'auto', whiteSpace: 'nowrap'}} 
+                    onClick={procesarCodigoManual}
+                  >
+                    Continuar →
+                  </button>
+                </div>
+              </div>
             </div>
           ) : (
             <div style={styles.cardLogin}>
               <h2 style={styles.cardTitle}>Registrar Préstamo</h2>
-              <p style={{margin: '15px 0', fontWeight: 'bold'}}>Libro Escaneado: {scannedCode}</p>
+              <p style={{margin: '15px 0', fontWeight: 'bold'}}>Libro Identificado: {scannedCode}</p>
               
               <input style={styles.input} placeholder="Nombre Completo del Alumno" onChange={e => setDatosPrestamo({...datosPrestamo, alumno: e.target.value})} />
               <input style={styles.input} placeholder="Número de Control / Matrícula" onChange={e => setDatosPrestamo({...datosPrestamo, matricula: e.target.value})} />
@@ -375,7 +423,7 @@ function App() {
               </button>
               
               <button onClick={() => setMostrarForm(false)} style={{background:'none', border:'none', color:'#666', marginTop:'15px', cursor:'pointer', textDecoration: 'underline'}}>
-                Escanear otro libro
+                Escanear o digitar otro libro
               </button>
             </div>
           )
