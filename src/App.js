@@ -17,9 +17,9 @@ function App() {
   const [nuevoUser, setNuevoUser] = useState({ nombre_completo: '', usuario: '', password: '' });
   const [credenciales, setCredenciales] = useState({ usuario: '', pass: '' });
 
-  // --- MÓDULO DE PRÉSTAMOS ---
-  const [datosPrestamo, setDatosPrestamo] = useState({ alumno: '', matricula: '' });
-  // Estado local para capturar el código ingresado por teclado
+  // --- MÓDULO DE PRÉSTAMOS (Se añade campo 'carrera' y 'tituloLibro') ---
+  const [datosPrestamo, setDatosPrestamo] = useState({ alumno: '', matricula: '', carrera: '' });
+  const [tituloLibroDetectado, setTituloLibroDetectado] = useState("");
   const [codigoManual, setCodigoManual] = useState("");
 
   // --- LÓGICA DE CIERRE DE SESIÓN ---
@@ -118,14 +118,65 @@ function App() {
     setNuevoUser({ ...nuevoUser, nombre_completo: nombreCompleto, usuario: usuarioSugerido });
   };
 
+  // --- VALIDACIÓN ESTRICTA DE EXISTENCIA DE LIBRO ---
+  const validarYProcederLibro = async (codigo) => {
+    try {
+      const respuesta = await fetch(`https://10.19.11.249:3001/api/verificar-libro/${codigo}`);
+      const data = await respuesta.json();
+      
+      if (!respuesta.ok || !data.existe) {
+        alert(`❌ ERROR: El libro con código "${codigo}" NO existe en la base de datos. Registro cancelado.`);
+        return;
+      }
+      
+      // Si el libro sí existe, guardamos los datos y avanzamos
+      setScannedCode(codigo);
+      setTituloLibroDetectado(data.libro.titulo);
+      setMostrarForm(true);
+    } catch (error) {
+      alert("Error al conectar con el servidor para validar el libro.");
+    }
+  };
+
+  // --- BÚSQUEDA AUTOMÁTICA DE ALUMNO ---
+  const buscarAlumnoPorMatricula = async () => {
+    if (!datosPrestamo.matricula.trim()) {
+      alert("⚠️ Ingresa una matrícula para buscar.");
+      return;
+    }
+    try {
+      const respuesta = await fetch(`https://10.19.11.249:3001/api/buscar-alumno/${datosPrestamo.matricula.trim()}`);
+      const data = await respuesta.json();
+      
+      if (!respuesta.ok || !data.encontrado) {
+        alert("⚠️ Alumno no encontrado. Por favor ingrese los datos manualmente.");
+        return;
+      }
+      
+      // Auto-rellenar campos obtenidos del backend
+      setDatosPrestamo({
+        ...datosPrestamo,
+        alumno: data.alumno.nombre,
+        carrera: data.alumno.carrera
+      });
+      alert("✅ Alumno cargado correctamente.");
+    } catch (error) {
+      alert("Error al conectar con el servidor para buscar al alumno.");
+    }
+  };
+
   // --- ESCÁNER QR ---
   useEffect(() => {
     const element = document.getElementById('reader');
     if ((vistaActual === "registro" || vistaActual === "prestamos") && !mostrarForm && element) {
       const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
       scanner.render((text) => {
-        setScannedCode(text);
-        setMostrarForm(true);
+        if (vistaActual === "prestamos") {
+          validarYProcederLibro(text.trim());
+        } else {
+          setScannedCode(text);
+          setMostrarForm(true);
+        }
         scanner.clear();
       }, () => {});
       return () => { scanner.clear().catch(() => {}); };
@@ -149,7 +200,6 @@ function App() {
     });
   };
 
-  // --- GUARDAR NUEVO USUARIO (CON CANDADO PARA ENTRADAS EN BLANCO) ---
   const guardarUsuario = () => {
     if (!nuevoUser.nombre_completo.trim() || !nuevoUser.usuario.trim() || !nuevoUser.password.trim()) {
       alert("⚠️ Todos los campos son obligatorios. No se aceptan registros vacíos.");
@@ -169,8 +219,8 @@ function App() {
 
   // --- PROCESAR EL PRÉSTAMO ---
   const procesarPrestamo = () => {
-    if (!datosPrestamo.alumno.trim() || !datosPrestamo.matricula.trim()) {
-      alert("⚠️ Por favor llena todos los campos del alumno");
+    if (!datosPrestamo.alumno.trim() || !datosPrestamo.matricula.trim() || !datosPrestamo.carrera.trim()) {
+      alert("⚠️ Por favor llena todos los campos del alumno (Nombre, Matrícula y Carrera)");
       return;
     }
     
@@ -180,26 +230,25 @@ function App() {
       body: JSON.stringify({ 
         codigo: scannedCode, 
         alumno: datosPrestamo.alumno, 
-        matricula: datosPrestamo.matricula, 
+        matricula: datosPrestamo.matricula,
+        carrera: datosPrestamo.carrera, 
         usuario_accion: user 
       })
     }).then(() => {
       alert("✅ Préstamo procesado con éxito");
-      setDatosPrestamo({ alumno: '', matricula: '' });
+      setDatosPrestamo({ alumno: '', matricula: '', carrera: '' });
       setMostrarForm(false);
       setVistaActual("menu");
     });
   };
 
-  // Lógica auxiliar para procesar el código introducido manualmente
   const procesarCodigoManual = () => {
     if (!codigoManual.trim()) {
       alert("⚠️ Debes ingresar un código válido");
       return;
     }
-    setScannedCode(codigoManual.trim());
-    setCodigoManual(""); // Limpiar el campo
-    setMostrarForm(true);
+    validarYProcederLibro(codigoManual.trim());
+    setCodigoManual(""); 
   };
 
   return (
@@ -233,8 +282,7 @@ function App() {
             <div style={styles.menuItem} onClick={() => setVistaActual("registro")}><span style={styles.icon}>📸</span><h3>Registro</h3><p>Escanear libros</p></div>
             <div style={styles.menuItem} onClick={() => setVistaActual("inventario")}><span style={styles.icon}>📊</span><h3>Inventario</h3><p>Lista completa</p></div>
             
-            {/* VISTA PRESTAMOS YA HABILITADA */}
-            <div style={styles.menuItem} onClick={() => { setVistaActual("prestamos"); setMostrarForm(false); setScannedCode(""); setCodigoManual(""); }}>
+            <div style={styles.menuItem} onClick={() => { setVistaActual("prestamos"); setMostrarForm(false); setScannedCode(""); setCodigoManual(""); setDatosPrestamo({alumno:'', matricula:'', carrera:''}); }}>
               <span style={styles.icon}>🤝</span><h3>Préstamos</h3><p>Registrar salidas</p>
             </div>
             
@@ -367,17 +415,15 @@ function App() {
           )
         )}
 
-        {/* INTERFAZ DEL FLUJO DE PRÉSTAMOS */}
+        {/* INTERFAZ DEL FLUJO DE PRÉSTAMOS CON CANDADOS Y BÚSQUEDA AUTOMÁTICA */}
         {vistaActual === "prestamos" && (
           !mostrarForm ? (
             <div style={styles.cardTable}>
               <button onClick={() => setVistaActual("menu")} style={styles.btnBack}>← Volver</button>
               <h3 style={{marginTop: '15px', color: '#003366'}}>Paso 1: Escanea el QR del libro o ingrésalo manualmente</h3>
               
-              {/* Contenedor de la cámara */}
               <div id="reader" style={{marginTop:'20px'}}></div>
               
-              {/* Bloque para entrada alternativa por teclado */}
               <div style={{
                 marginTop: '30px', 
                 padding: '20px', 
@@ -395,16 +441,9 @@ function App() {
                     placeholder="Escribe el código aquí..." 
                     value={codigoManual}
                     onChange={e => setCodigoManual(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        procesarCodigoManual();
-                      }
-                    }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') procesarCodigoManual(); }}
                   />
-                  <button 
-                    style={{...styles.btnSave, width: 'auto', whiteSpace: 'nowrap'}} 
-                    onClick={procesarCodigoManual}
-                  >
+                  <button style={{...styles.btnSave, width: 'auto', whiteSpace: 'nowrap'}} onClick={procesarCodigoManual}>
                     Continuar →
                   </button>
                 </div>
@@ -413,12 +452,43 @@ function App() {
           ) : (
             <div style={styles.cardLogin}>
               <h2 style={styles.cardTitle}>Registrar Préstamo</h2>
-              <p style={{margin: '15px 0', fontWeight: 'bold'}}>Libro Identificado: {scannedCode}</p>
+              <div style={{margin: '15px 0', textAlign: 'left', backgroundColor: '#eef4fa', padding: '10px', borderRadius: '8px'}}>
+                <p style={{margin: '0 0 5px 0'}}><strong>Código Libro:</strong> {scannedCode}</p>
+                <p style={{margin: 0}}><strong>Título:</strong> {tituloLibroDetectado}</p>
+              </div>
               
-              <input style={styles.input} placeholder="Nombre Completo del Alumno" onChange={e => setDatosPrestamo({...datosPrestamo, alumno: e.target.value})} />
-              <input style={styles.input} placeholder="Número de Control / Matrícula" onChange={e => setDatosPrestamo({...datosPrestamo, matricula: e.target.value})} />
+              {/* Sección de número de control con botón de búsqueda integrado */}
+              <div style={{display: 'flex', gap: '10px', marginBottom: '10px'}}>
+                <input 
+                  style={{...styles.input, marginBottom: 0}} 
+                  placeholder="Número de Control / Matrícula" 
+                  value={datosPrestamo.matricula}
+                  onChange={e => setDatosPrestamo({...datosPrestamo, matricula: e.target.value})}
+                />
+                <button 
+                  type="button" 
+                  style={{...styles.btnSave, backgroundColor: '#ff8c00', width: 'auto', whiteSpace: 'nowrap'}}
+                  onClick={buscarAlumnoPorMatricula}
+                >
+                  🔍 Buscar
+                </button>
+              </div>
 
-              <button style={{...styles.btnSave, marginTop:'10px', width: '100%'}} onClick={procesarPrestamo}>
+              {/* Campos auto-rellenables (pero editables por si acaso) */}
+              <input 
+                style={styles.input} 
+                placeholder="Nombre Completo del Alumno" 
+                value={datosPrestamo.alumno}
+                onChange={e => setDatosPrestamo({...datosPrestamo, alumno: e.target.value})} 
+              />
+              <input 
+                style={styles.input} 
+                placeholder="Carrera del Alumno" 
+                value={datosPrestamo.carrera}
+                onChange={e => setDatosPrestamo({...datosPrestamo, carrera: e.target.value})} 
+              />
+
+              <button style={{...styles.btnSave, marginTop:'10px', width: '100%'} } onClick={procesarPrestamo}>
                 Confirmar Salida
               </button>
               
