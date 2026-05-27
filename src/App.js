@@ -57,7 +57,7 @@ function App() {
     }
   }, [user, credenciales.usuario, cerrarSesion]);
 
-  // --- LÓGICA DE LOGIN ---
+  // --- LÓGICA DE LOGIN (IP AUTOMÁTICA) ---
   const manejarLogin = async (e) => {
     e.preventDefault();
 
@@ -68,7 +68,7 @@ function App() {
     }
     
     try {
-      const respuesta = await fetch('https://10.19.11.249:3001/api/login', {
+      const respuesta = await fetch(`https://${window.location.hostname}:3001/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ usuario: credenciales.usuario, password: credenciales.pass })
@@ -85,18 +85,18 @@ function App() {
     }
   };
 
-  // --- CARGA DE DATOS ---
+  // --- CARGA DE DATOS (IP AUTOMÁTICA) ---
   const cargarLogs = () => {
-    fetch('https://10.19.11.249:3001/api/logs-acceso').then(res => res.json()).then(data => setLogsAcceso(data));
-    fetch('https://10.19.11.249:3001/api/log-libros').then(res => res.json()).then(data => setLogsLibros(data));
+    fetch(`https://${window.location.hostname}:3001/api/logs-acceso`).then(res => res.json()).then(data => setLogsAcceso(data));
+    fetch(`https://${window.location.hostname}:3001/api/log-libros`).then(res => res.json()).then(data => setLogsLibros(data));
   };
 
   const cargarUsuarios = () => {
-    fetch('https://10.19.11.249:3001/api/usuarios').then(res => res.json()).then(data => setUsuarios(data));
+    fetch(`https://${window.location.hostname}:3001/api/usuarios`).then(res => res.json()).then(data => setUsuarios(data));
   };
 
   const cargarLibros = () => {
-    fetch('https://10.19.11.249:3001/api/libros').then(res => res.json()).then(data => setLibros(data));
+    fetch(`https://${window.location.hostname}:3001/api/libros`).then(res => res.json()).then(data => setLibros(data));
   };
 
   useEffect(() => {
@@ -118,10 +118,10 @@ function App() {
     setNuevoUser({ ...nuevoUser, nombre_completo: nombreCompleto, usuario: usuarioSugerido });
   };
 
-  // --- VALIDACIÓN DE EXISTENCIA DE LIBRO EN LA BASE DE DATOS ---
+  // --- VALIDACIÓN DE EXISTENCIA DE LIBRO EN LA BASE DE DATOS (IP AUTOMÁTICA) ---
   const validarYProcederLibro = async (codigo) => {
     try {
-      const respuesta = await fetch(`https://10.19.11.249:3001/api/verificar-libro/${codigo}`);
+      const respuesta = await fetch(`https://${window.location.hostname}:3001/api/verificar-libro/${codigo}`);
       const data = await respuesta.json();
       
       if (!respuesta.ok || !data.existe) {
@@ -129,7 +129,6 @@ function App() {
         return;
       }
       
-      // Si el libro existe, configuramos los estados y abrimos el formulario
       setScannedCode(codigo);
       setTituloLibroDetectado(data.libro.titulo);
       setMostrarForm(true);
@@ -138,14 +137,14 @@ function App() {
     }
   };
 
-  // --- BÚSQUEDA AUTOMÁTICA DE ALUMNO POR MATRÍCULA ---
+  // --- BÚSQUEDA AUTOMÁTICA DE ALUMNO POR MATRÍCULA (IP AUTOMÁTICA) ---
   const buscarAlumnoPorMatricula = async () => {
     if (!datosPrestamo.matricula.trim()) {
       alert("⚠️ Ingresa una matrícula para buscar.");
       return;
     }
     try {
-      const respuesta = await fetch(`https://10.19.11.249:3001/api/buscar-alumno/${datosPrestamo.matricula.trim()}`);
+      const respuesta = await fetch(`https://${window.location.hostname}:3001/api/buscar-alumno/${datosPrestamo.matricula.trim()}`);
       const data = await respuesta.json();
       
       if (!respuesta.ok || !data.encontrado) {
@@ -164,7 +163,7 @@ function App() {
     }
   };
 
-  // --- ESCÁNER QR CON COMPORTAMIENTO ASÍNCRONO SEGURO ---
+  // --- ESCÁNER QR CON COMPORTAMIENTO ASÍNCRONO SEGURO (CORREGIDO 'codigoLinter') ---
   useEffect(() => {
     const element = document.getElementById('reader');
     if ((vistaActual === "registro" || vistaActual === "prestamos") && !mostrarForm && element) {
@@ -177,7 +176,7 @@ function App() {
           validarYProcederLibro(codigoLimpio);
         } else {
           await scanner.clear().catch(() => {});
-          // CORRECCIÓN: Se cambió 'codigoLinter' por la variable definida 'codigoLimpio'
+          // CORRECCIÓN EFECTUADA AQUÍ: 'codigoLinter' cambiado por 'codigoLimpio'
           setScannedCode(codigoLimpio);
           setMostrarForm(true);
         }
@@ -193,7 +192,7 @@ function App() {
       return;
     }
 
-    fetch('https://10.19.11.249:3001/api/registrar-libro', {
+    fetch(`https://${window.location.hostname}:3001/api/registrar-libro`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ codigo: scannedCode, ...datosLibro, estado: 'Disponible', usuario_accion: user })
@@ -210,7 +209,7 @@ function App() {
       return;
     }
 
-    fetch('https://10.19.11.249:3001/api/usuarios', {
+    fetch(`https://${window.location.hostname}:3001/api/usuarios`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(nuevoUser)
@@ -221,14 +220,14 @@ function App() {
     });
   };
 
-  // --- PROCESAR EL PRÉSTAMO ---
+  // --- PROCESAR EL PRÉSTAMO (IP AUTOMÁTICA) ---
   const procesarPrestamo = () => {
     if (!datosPrestamo.alumno.trim() || !datosPrestamo.matricula.trim() || !datosPrestamo.carrera.trim()) {
       alert("⚠️ Por favor llena todos los campos del alumno (Nombre, Matrícula y Carrera)");
       return;
     }
     
-    fetch('https://10.19.11.249:3001/api/prestar-libro', {
+    fetch(`https://${window.location.hostname}:3001/api/prestar-libro`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -363,7 +362,7 @@ function App() {
                 {usuarios.map((u, i) => (
                   <tr key={i} style={styles.trOdd}>
                     <td style={styles.td}>{u.nombre_completo}</td><td style={styles.td}>{u.usuario}</td>
-                    <td style={styles.td}>{u.usuario !== 'admin' && <button style={{color:'red', border:'none', background:'none', cursor:'pointer'}} onClick={() => fetch(`https://10.19.11.249:3001/api/usuarios/${u.id}`, {method:'DELETE'}).then(() => cargarUsuarios())}>Eliminar</button>}</td>
+                    <td style={styles.td}>{u.usuario !== 'admin' && <button style={{color:'red', border:'none', background:'none', cursor:'pointer'}} onClick={() => fetch(`https://${window.location.hostname}:3001/api/usuarios/${u.id}`, {method:'DELETE'}).then(() => cargarUsuarios())}>Eliminar</button>}</td>
                   </tr>
                 ))}
               </tbody>
