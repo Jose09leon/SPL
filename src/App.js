@@ -164,7 +164,7 @@ function App() {
     }
   };
 
-  // --- ESCÁNER QR MODIFICADO PARA COMPORTAMIENTO ASÍNCRONO SEGURO ---
+  // --- ESCÁNER QR CON COMPORTAMIENTO ASÍNCRONO SEGURO ---
   useEffect(() => {
     const element = document.getElementById('reader');
     if ((vistaActual === "registro" || vistaActual === "prestamos") && !mostrarForm && element) {
@@ -177,7 +177,8 @@ function App() {
           validarYProcederLibro(codigoLimpio);
         } else {
           await scanner.clear().catch(() => {});
-          setScannedCode(codigoLinter);
+          // CORRECCIÓN: Se cambió 'codigoLinter' por la variable definida 'codigoLimpio'
+          setScannedCode(codigoLimpio);
           setMostrarForm(true);
         }
       }, () => {});
