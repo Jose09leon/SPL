@@ -48,11 +48,11 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// --- GESTIÓN DE USUARIOS (EL QUE NO ESTÁ REGISTRANDO) ---
+// --- GESTIÓN DE USUARIOS ---
 app.post('/api/usuarios', (req, res) => {
     const { nombre_completo, usuario, password } = req.body;
     
-    console.log("Intentando registrar usuario:", usuario); // Log para debug
+    console.log("Intentando registrar usuario:", usuario);
 
     const query = "INSERT INTO usuarios (nombre_completo, usuario, password) VALUES (?, ?, ?)";
     db.query(query, [nombre_completo, usuario, password], (err, result) => {
@@ -81,7 +81,10 @@ app.delete('/api/usuarios/:id', (req, res) => {
 
 // --- LIBROS ---
 app.get('/api/libros', (req, res) => {
-    db.query("SELECT * FROM libros ORDER BY id DESC", (err, r) => res.json(r));
+    db.query("SELECT * FROM libros ORDER BY id DESC", (err, r) => {
+        if (err) return res.status(500).json(err);
+        res.json(r);
+    });
 });
 
 app.post('/api/registrar-libro', (req, res) => {
@@ -95,16 +98,113 @@ app.post('/api/registrar-libro', (req, res) => {
     });
 });
 
-// --- HTTPS ---
-const PORT = 3001;
-try {
-    const certs = {
-        key: fs.readFileSync('./certs/biblioteca.key'),
-        cert: fs.readFileSync('./certs/biblioteca.crt')
-    };
-    https.createServer(certs, app).listen(PORT, '0.0.0.0', () => {
-        console.log("🚀 Backend HTTPS en 3001");
+// --- VERIFICAR SI UN LIBRO EXISTE ANTES DE PRESTAR ---
+app.get('/api/verificar-libro/:codigo', (req, res) => {
+    const { codigo } = req.params;
+    const query = "SELECT * FROM libros WHERE codigo = ?";
+    
+    db.query(query, [codigo], (err, results) => {
+        if (err) return res.status(500).json(err);
+        
+        if (results.length === 0) {
+            return res.status(404).json({ existe: false, message: "Libro no encontrado" });
+        }
+        res.json({ existe: true, libro: results[0] });
     });
-} catch (e) {
-    console.error("Error Certificados:", e.message);
-}
+});
+
+// --- BUSCADOR EN CASCADA INTELIGENTE BLINDADO CONTRA ERRORES DE COLUMNAS ---
+app.get('/api/buscar-alumno/:matricula', (req, res) => {
+    const { matricula } = req.params;
+    
+    // 1. Buscamos primero en la tabla alumnos usando tus nombres de columna reales
+    const queryAlumnos = `
+        SELECT 
+            CONCAT(nombre_alumno, ' ', apellido_paterno, ' ', apellido_materno) AS nombre, 
+            carrera 
+        FROM alumnos 
+        WHERE no_de_control = ?
+    `;
+    
+    db.query(queryAlumnos, [matricula], (err, alumnoResults) => {
+        if (err) {
+            console.error("Error al consultar la tabla alumnos:", err.message);
+            return res.status(500).json({ error: "Error en base de datos al buscar alumno" });
+        }
+        
+        // Si el registro se encuentra en alumnos, respondemos de inmediato al frontend
+        if (alumnoResults.length > 0) {
+            return res.json({ encontrado: true, alumno: alumnoResults[0] });
+        }
+        
+        // 2. Si no se encuentra en alumnos, pasamos a buscar en la tabla maestros usando '*' de manera segura
+        const queryMaestros = "SELECT * FROM maestros WHERE no_tarjeta = ?";
+        
+        db.query(queryMaestros, [matricula], (errMaestros, maestroResults) => {
+            if (errMaestros) {
+                console.error("Error al consultar la tabla maestros:", errMaestros.message);
+                return res.status(500).json({ error: "Error en base de datos al buscar maestro" });
+            }
+            
+            // Si se encuentra en maestros, extraemos el nombre dinámicamente según tus columnas
+            if (maestroResults.length > 0) {
+                const fila = maestroResults[0];
+                let nombreDetectado = "Docente Registrado";
+
+                // Caso A: Si usaste columnas separadas para el maestro como en los alumnos
+                if (fila.nombre_maestro || fila.nombre_docente) {
+                    nombreDetectado = fila.nombre_maestro || fila.nombre_docente;
+                } else if (fila.nombre_alumno) {
+                    // Si clonaste la estructura de la tabla alumnos
+                    nombreDetectado = `${fila.nombre_alumno} ${fila.apellido_paterno || ''} ${fila.apellido_materno || ''}`.trim();
+                } else {
+                    // Caso B: Buscar cualquier columna de texto que contenga el nombre del docente
+                    const llaves = Object.keys(fila);
+                    for (let llave of llaves) {
+                        if (llave.toLowerCase().includes('nom') || llave.toLowerCase().includes('maestro') || llave.toLowerCase().includes('docente')) {
+                            nombreDetectado = fila[llave];
+                            break;
+                        }
+                    }
+                }
+
+                return res.json({ 
+                    encontrado: true, 
+                    alumno: {
+                        nombre: nombreDetectado,
+                        carrera: 'Docente LSI'
+                    }
+                });
+            }
+            
+            // 3. Si no existe en ninguna de las dos tablas, enviamos un estado 404
+            res.status(404).json({ encontrado: false, message: "Usuario no registrado en el sistema" });
+        });
+    });
+});
+
+// --- PROCESAR EL PRÉSTAMO Y REGISTRAR EN BITÁCORA ---
+app.post('/api/prestar-libro', (req, res) => {
+    const { codigo, alumno, matricula, carrera, usuario_accion } = req.body;
+
+    const queryUpdate = "UPDATE libros SET estado = 'Prestado' WHERE codigo = ?";
+    
+    db.query(queryUpdate, [codigo], (err, result) => {
+        if (err) return res.status(500).json(err);
+
+        const detallesLog = `Prestado a: ${alumno} | Identificador: ${matricula} | Tipo: ${carrera} | Cód. Libro: ${codigo}`;
+        const queryLog = "INSERT INTO log_libros (usuario, accion, detalles, fecha) VALUES (?, 'Préstamo', ?, NOW())";
+        
+        db.query(queryLog, [usuario_accion, detallesLog], (logErr) => {
+            if (logErr) console.error("Error al registrar movimiento de préstamo:", logErr);
+        });
+
+        res.json({ success: true });
+    });
+});
+
+// --- NUEVO INICIO DEL SERVIDOR EN HTTP PLANO (HÍBRIDO LAN/TAILSCALE) ---
+const PORT = 3001;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log("🚀 Backend híbrido libre de certificados corriendo en el puerto 3001");
+});

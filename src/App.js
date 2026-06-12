@@ -2,6 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Html5QrcodeScanner } from "html5-qrcode";
 import logoVenado from './assets/LogoLSI.png';
 
+// --- CONFIGURACIÓN HÍBRIDA DINÁMICA ---
+// Detecta automáticamente si estás entrando por la IP local (10.19.11.249) o Tailscale (100.87.164.52)
+const API_URL = `http://${window.location.hostname}:3001`;
+
 function App() {
   const [user, setUser] = useState(null);
   const [vistaActual, setVistaActual] = useState("login");
@@ -37,7 +41,8 @@ function App() {
       if (timeoutId) clearTimeout(timeoutId);
 
       timeoutId = setTimeout(() => {
-        const esAdmin = credenciales.usuario.toLowerCase() === 'admin' || credenciales.usuario.toLowerCase() === 'ad';
+        // Se evalúa si es admin basándose en el usuario autenticado por la API
+        const esAdmin = user === "Administrador Local" || credenciales.usuario.toLowerCase() === 'admin';
         if (user && !esAdmin) {
           alert("Tu sesión ha expirado por inactividad (5 minutos).");
           cerrarSesion();
@@ -57,18 +62,12 @@ function App() {
     }
   }, [user, credenciales.usuario, cerrarSesion]);
 
-  // --- LÓGICA DE LOGIN (IP AUTOMÁTICA) ---
+  // --- LÓGICA DE LOGIN ---
   const manejarLogin = async (e) => {
     e.preventDefault();
-
-    if (credenciales.usuario === 'ad' && credenciales.pass === '12345') {
-      setUser("Administrador Local");
-      setVistaActual("menu");
-      return; 
-    }
     
     try {
-      const respuesta = await fetch(`https://${window.location.hostname}:3001/api/login`, {
+      const respuesta = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ usuario: credenciales.usuario, password: credenciales.pass })
@@ -85,18 +84,18 @@ function App() {
     }
   };
 
-  // --- CARGA DE DATOS (IP AUTOMÁTICA) ---
+  // --- CARGA DE DATOS DESDE API_URL ---
   const cargarLogs = () => {
-    fetch(`https://${window.location.hostname}:3001/api/logs-acceso`).then(res => res.json()).then(data => setLogsAcceso(data));
-    fetch(`https://${window.location.hostname}:3001/api/log-libros`).then(res => res.json()).then(data => setLogsLibros(data));
+    fetch(`${API_URL}/api/logs-acceso`).then(res => res.json()).then(data => setLogsAcceso(data));
+    fetch(`${API_URL}/api/log-libros`).then(res => res.json()).then(data => setLogsLibros(data));
   };
 
   const cargarUsuarios = () => {
-    fetch(`https://${window.location.hostname}:3001/api/usuarios`).then(res => res.json()).then(data => setUsuarios(data));
+    fetch(`${API_URL}/api/usuarios`).then(res => res.json()).then(data => setUsuarios(data));
   };
 
   const cargarLibros = () => {
-    fetch(`https://${window.location.hostname}:3001/api/libros`).then(res => res.json()).then(data => setLibros(data));
+    fetch(`${API_URL}/api/libros`).then(res => res.json()).then(data => setLibros(data));
   };
 
   useEffect(() => {
@@ -118,10 +117,10 @@ function App() {
     setNuevoUser({ ...nuevoUser, nombre_completo: nombreCompleto, usuario: usuarioSugerido });
   };
 
-  // --- VALIDACIÓN DE EXISTENCIA DE LIBRO EN LA BASE DE DATOS (IP AUTOMÁTICA) ---
+  // --- VALIDACIÓN DE EXISTENCIA DE LIBRO EN LA BASE DE DATOS ---
   const validarYProcederLibro = async (codigo) => {
     try {
-      const respuesta = await fetch(`https://${window.location.hostname}:3001/api/verificar-libro/${codigo}`);
+      const respuesta = await fetch(`${API_URL}/api/verificar-libro/${codigo}`);
       const data = await respuesta.json();
       
       if (!respuesta.ok || !data.existe) {
@@ -137,18 +136,18 @@ function App() {
     }
   };
 
-  // --- BÚSQUEDA AUTOMÁTICA DE ALUMNO POR MATRÍCULA (IP AUTOMÁTICA) ---
+  // --- BÚSQUEDA EN CASCADA AUTOMÁTICA DE USUARIOS ---
   const buscarAlumnoPorMatricula = async () => {
     if (!datosPrestamo.matricula.trim()) {
-      alert("⚠️ Ingresa una matrícula para buscar.");
+      alert("⚠️ Ingresa una matrícula o tarjeta para buscar.");
       return;
     }
     try {
-      const respuesta = await fetch(`https://${window.location.hostname}:3001/api/buscar-alumno/${datosPrestamo.matricula.trim()}`);
+      const respuesta = await fetch(`${API_URL}/api/buscar-alumno/${datosPrestamo.matricula.trim()}`);
       const data = await respuesta.json();
       
       if (!respuesta.ok || !data.encontrado) {
-        alert("⚠️ Alumno no encontrado. Por favor ingrese los datos manualmente.");
+        alert("⚠️ Usuario no encontrado. Por favor ingrese los datos manualmente.");
         return;
       }
       
@@ -157,13 +156,13 @@ function App() {
         alumno: data.alumno.nombre,
         carrera: data.alumno.carrera
       });
-      alert("✅ Alumno cargado correctamente.");
+      alert("✅ Usuario cargado correctamente.");
     } catch (error) {
-      alert("Error al conectar con el servidor para buscar al alumno.");
+      alert("Error al conectar con el servidor para buscar al usuario.");
     }
   };
 
-  // --- ESCÁNER QR CON COMPORTAMIENTO ASÍNCRONO SEGURO (CORREGIDO 'codigoLinter') ---
+  // --- ESCÁNER QR ---
   useEffect(() => {
     const element = document.getElementById('reader');
     if ((vistaActual === "registro" || vistaActual === "prestamos") && !mostrarForm && element) {
@@ -176,7 +175,6 @@ function App() {
           validarYProcederLibro(codigoLimpio);
         } else {
           await scanner.clear().catch(() => {});
-          // CORRECCIÓN EFECTUADA AQUÍ: 'codigoLinter' cambiado por 'codigoLimpio'
           setScannedCode(codigoLimpio);
           setMostrarForm(true);
         }
@@ -192,7 +190,7 @@ function App() {
       return;
     }
 
-    fetch(`https://${window.location.hostname}:3001/api/registrar-libro`, {
+    fetch(`${API_URL}/api/registrar-libro`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ codigo: scannedCode, ...datosLibro, estado: 'Disponible', usuario_accion: user })
@@ -209,7 +207,7 @@ function App() {
       return;
     }
 
-    fetch(`https://${window.location.hostname}:3001/api/usuarios`, {
+    fetch(`${API_URL}/api/usuarios`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(nuevoUser)
@@ -220,14 +218,14 @@ function App() {
     });
   };
 
-  // --- PROCESAR EL PRÉSTAMO (IP AUTOMÁTICA) ---
+  // --- PROCESAR EL PRÉSTAMO ---
   const procesarPrestamo = () => {
     if (!datosPrestamo.alumno.trim() || !datosPrestamo.matricula.trim() || !datosPrestamo.carrera.trim()) {
-      alert("⚠️ Por favor llena todos los campos del alumno (Nombre, Matrícula y Carrera)");
+      alert("⚠️ Por favor llena todos los campos del usuario (Nombre, Identificador y Tipo)");
       return;
     }
     
-    fetch(`https://${window.location.hostname}:3001/api/prestar-libro`, {
+    fetch(`${API_URL}/api/prestar-libro`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -282,7 +280,7 @@ function App() {
         {vistaActual === "menu" && (
           <div style={styles.menuGrid}>
             <div style={styles.welcomeText}><h3>Bienvenido, {user}</h3></div>
-            <div style={styles.menuItem} onClick={() => setVistaActual("registro")}><span style={styles.icon}>📸</span><h3>Registro</h3><p>Escanear libros</p></div>
+            <div style={styles.menuItem} onClick={() => setVistaActual("registro")}><span style={styles.icon}>📷</span><h3>Registro</h3><p>Escanear libros</p></div>
             <div style={styles.menuItem} onClick={() => setVistaActual("inventario")}><span style={styles.icon}>📊</span><h3>Inventario</h3><p>Lista completa</p></div>
             
             <div style={styles.menuItem} onClick={() => { setVistaActual("prestamos"); setMostrarForm(false); setScannedCode(""); setCodigoManual(""); setDatosPrestamo({alumno:'', matricula:'', carrera:''}); }}>
@@ -291,7 +289,7 @@ function App() {
             
             <div style={styles.menuItemDisabled}><span style={styles.icon}>🔄</span><h3>Devoluciones</h3><p>Próximamente</p></div>
             
-            {(credenciales.usuario.toLowerCase() === 'admin' || credenciales.usuario.toLowerCase() === 'ad') && (
+            {(credenciales.usuario.toLowerCase() === 'admin' || credenciales.usuario.toLowerCase() === 'ad' || user === "Administrador Local") && (
               <>
                 <div style={{...styles.menuItem, borderBottom: '6px solid #ff8c00'}} onClick={() => setVistaActual("admin_usuarios")}><span style={styles.icon}>⚙️</span><h3>Administración</h3><p>Gestionar Usuarios</p></div>
                 <div style={{...styles.menuItem, borderBottom: '6px solid #28a745'}} onClick={() => setVistaActual("logs")}><span style={styles.icon}>📝</span><h3>Bitácora</h3><p>Ver Historial</p></div>
@@ -362,7 +360,7 @@ function App() {
                 {usuarios.map((u, i) => (
                   <tr key={i} style={styles.trOdd}>
                     <td style={styles.td}>{u.nombre_completo}</td><td style={styles.td}>{u.usuario}</td>
-                    <td style={styles.td}>{u.usuario !== 'admin' && <button style={{color:'red', border:'none', background:'none', cursor:'pointer'}} onClick={() => fetch(`https://${window.location.hostname}:3001/api/usuarios/${u.id}`, {method:'DELETE'}).then(() => cargarUsuarios())}>Eliminar</button>}</td>
+                    <td style={styles.td}>{u.usuario !== 'admin' && <button style={{color:'red', border:'none', background:'none', cursor:'pointer'}} onClick={() => fetch(`${API_URL}/api/usuarios/${u.id}`, {method:'DELETE'}).then(() => cargarUsuarios())}>Eliminar</button>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -407,10 +405,13 @@ function App() {
               <select style={styles.input} value={datosLibro.ubicacion} onChange={e => setDatosLibro({...datosLibro, ubicacion: e.target.value})}>
                 <option>Mueble 1 - Nivel 1</option>
                 <option>Mueble 1 - Nivel 2</option>
+                <option>Mueble 1 - Nivel 3</option>
                 <option>Mueble 2 - Nivel 1</option>
                 <option>Mueble 2 - Nivel 2</option>
+                <option>Mueble 2 - Nivel 3</option>
                 <option>Mueble 3 - Nivel 1</option>
                 <option>Mueble 3 - Nivel 2</option>
+                <option>Mueble 3 - Nivel 3</option>
               </select>
               <button onClick={guardarLibro} style={{...styles.btnSave, marginTop:'10px'}}>Guardar</button>
               <button onClick={() => setMostrarForm(false)} style={{background:'none', border:'none', color:'#666', marginTop:'10px', cursor:'pointer'}}>Reintentar</button>
@@ -418,7 +419,7 @@ function App() {
           )
         )}
 
-        {/* INTERFAZ DEL FLUJO DE PRÉSTAMOS CON CANDADOS Y BÚSQUEDA AUTOMÁTICA */}
+        {/* INTERFAZ DEL FLUJO DE PRÉSTAMOS */}
         {vistaActual === "prestamos" && (
           !mostrarForm ? (
             <div style={styles.cardTable}>
@@ -478,13 +479,13 @@ function App() {
 
               <input 
                 style={styles.input} 
-                placeholder="Nombre Completo del Alumno" 
+                placeholder="Nombre Completo del Usuario" 
                 value={datosPrestamo.alumno}
                 onChange={e => setDatosPrestamo({...datosPrestamo, alumno: e.target.value})} 
               />
               <input 
                 style={styles.input} 
-                placeholder="Carrera del Alumno" 
+                placeholder="Carrera o Tipo" 
                 value={datosPrestamo.carrera}
                 onChange={e => setDatosPrestamo({...datosPrestamo, carrera: e.target.value})} 
               />
